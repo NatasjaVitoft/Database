@@ -12,7 +12,7 @@ function App() {
     <>
       {isLoggedIn ? (
         <div>
-          <Projects></Projects>
+          <Projects />
         </div>
       ) :
         <div>

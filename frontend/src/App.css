@@ -51,6 +51,7 @@
 
 .login-form button {
   padding: 0.7rem;
+  margin-top: 0.3rem;
   background-color: var(--primary-color);
   color: white;
   border: none;

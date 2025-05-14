@@ -1,4 +1,4 @@
-interface AppendableObject {
+export interface AppendableObject {
     [key: string]: unknown;
 }
 
