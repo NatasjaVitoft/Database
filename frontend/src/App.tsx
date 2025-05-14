@@ -1,5 +1,4 @@
-import { useState, useContext } from 'react'
-import { Document } from './Document'
+import { useContext } from 'react'
 import { Login } from './Login';
 import AuthContext from './AuthContext';
 import { Projects } from './Projects';
@@ -10,13 +9,14 @@ function App() {
 
   return (
     <>
-      {isLoggedIn ? (
+      {email ? (
         <div>
-          <Projects />
+          <h1>Welcome {email}!</h1>
+          <Projects email={email}/>
         </div>
       ) :
         <div>
-          <Login setEmail={setEmail} setIsLoggedIn={setIsLoggedIn}/>
+          <Login setEmail={setEmail} setIsLoggedIn={setIsLoggedIn} />
         </div>
       }
     </>
