@@ -7,6 +7,7 @@ export function CreateProject(props: ICreateProjectProps) {
         name: "",
         format: "",
         collab: "",
+        reader: "",
     };
 
     const [projectInfo, setProjectInfo] = useState(init);
@@ -16,24 +17,27 @@ export function CreateProject(props: ICreateProjectProps) {
         console.log(projectInfo);
     }
 
-    function onCreateProject(e: FormEvent<HTMLFormElement>) {
-        e.preventDefault();
-        const collab_arr = projectInfo.collab.split(",");
-
-        const filtered = collab_arr
+    function stringToArray(str: string): string[] {
+        return str
+            .split(",")
             .map((s) => {
                 return s.trim();
             })
             .filter((s) => {
                 return s.length > 1;
             });
+    }
 
-        console.log(filtered);
+    function onCreateProject(e: FormEvent<HTMLFormElement>) {
+        e.preventDefault();
+        const collab_arr = stringToArray(projectInfo.collab)
+        const reader_arr = stringToArray(projectInfo.reader)
 
         const to_send = {
             name: projectInfo.name,
             format: projectInfo.format,
-            collab: filtered,
+            collab: collab_arr,
+            readers: reader_arr,
         };
 
         // TODO: submit to backend
@@ -54,8 +58,12 @@ export function CreateProject(props: ICreateProjectProps) {
                 <label>
                     Collaborator(s) (E-mail separated with ',')
                     <input type="text" id="collab" onChange={handleInput} />
-                    <button type="submit">Create</button>
                 </label>
+                <label>
+                    Reader(s) (E-mail separated with ',')
+                    <input type="text" id="reader" onChange={handleInput} />
+                </label>
+                <button type="submit">Create</button>
             </form>
         </div>
     );

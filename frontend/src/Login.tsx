@@ -21,13 +21,32 @@ export function Login({ setEmail, setIsLoggedIn }) {
         //  If succesful, add email to authcontext
         // if not display error
 
-        if (credentials.email == "sovs") {
-            setEmail(credentials.email);
-            setIsLoggedIn(true);
+        const opts = {
+            method: 'POST',
+            headers: {
+                "Content-type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(credentials)
         }
-        else {
-            setMsg("Wrong credentials!");
-        }
+
+        fetch('http://localhost:3000/login', opts)
+            .then(res => {
+                if (res.ok) {
+                    console.log(res)
+                    setEmail(credentials.email)
+                }
+                else if (res.status == 401) {
+                    console.log(res)
+                    setMsg("Invalid Credentials")
+                }
+                else {
+                    console.log(res)
+                    setMsg(`An error occured with status: ${res.statusText}`)
+                }
+            }).catch(res => {
+                console.log(res)
+            })
     }
 
     return (

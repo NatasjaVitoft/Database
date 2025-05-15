@@ -2,8 +2,28 @@ export interface AppendableObject {
     [key: string]: unknown;
 }
 
+/* function fetchSimple(url: string, method: string, body: object) {
+  const headers: AppendableObject = {
+    Accept: "application/json",
+  };
 
-function fetchData(url: string, callback: (r: unknown) => unknown, method: string, body: object) {
+  if (method === "POST" || method === "PUT") {
+    headers["Content-Type"] = "application/json";
+  }
+
+  const options: AppendableObject = makeOptions(method, body);
+
+  if (body) {
+    options.body = JSON.stringify(body);
+  }
+
+  fetch(url, options).then(res => {
+
+  })
+} */
+
+
+export function fetchData(url: string, succes_callback: (r: unknown) => unknown, method: string, body: object) {
 
 
     const headers: AppendableObject = {
@@ -27,7 +47,7 @@ function fetchData(url: string, callback: (r: unknown) => unknown, method: strin
         }
         return res.json();
       })
-      .then((data: Response) => callback(data))
+      .then((data: Response) => succes_callback(data))
       .catch(handleHttpErrors);
   }
 
