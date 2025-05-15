@@ -18,14 +18,17 @@ export function CreateProject(props: ICreateProjectProps) {
     }
 
     function stringToArray(str: string): string[] {
-        return str
-            .split(",")
-            .map((s) => {
-                return s.trim();
-            })
-            .filter((s) => {
-                return s.length > 1;
-            });
+        if (str) {
+            return str
+                .split(",")
+                .map((s) => {
+                    return s.trim();
+                })
+                .filter((s) => {
+                    return s.length > 1;
+                });
+        }
+        return [];
     }
 
     function onCreateProject(e: FormEvent<HTMLFormElement>) {
