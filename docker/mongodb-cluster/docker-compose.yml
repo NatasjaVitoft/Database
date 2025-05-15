@@ -1,0 +1,97 @@
+services:
+  # Config Server
+  configsvr1:
+    image: mongo:7
+    command: ["mongod", "--configsvr", "--replSet", "configReplSet", "--port", "27019"]
+    volumes:
+      - configsvr1:/data/db
+    ports:
+      - "27019:27019"
+    networks:
+      mongo_network:
+        ipv4_address: 172.38.0.12
+
+  # Shard 1
+  shard1:
+    image: mongo:7
+    command: ["mongod", "--shardsvr", "--replSet", "shard1ReplSet", "--port", "27018"]
+    volumes:
+      - shard1:/data/db
+    ports:
+      - "27018:27018"
+    networks:
+      mongo_network:
+        ipv4_address: 172.38.0.13
+
+  # Shard 2
+  shard2:
+    image: mongo:7
+    command: ["mongod", "--shardsvr", "--replSet", "shard2ReplSet", "--port", "27017"]
+    volumes:
+      - shard2:/data/db
+    ports:
+      - "27017:27017"
+    networks:
+      mongo_network:
+        ipv4_address: 172.38.0.14
+
+  # Mongos Router
+  mongos:
+    image: mongo:7
+    depends_on:
+      - configsvr1
+    ports:
+      - "27020:27017"
+    command: ["mongos", "--configdb", "configReplSet/172.38.0.12:27019", "--bind_ip_all"]
+    networks:
+      mongo_network:
+        ipv4_address: 172.38.0.11
+
+  # One-time Initialization Container
+  init:
+    image: mongo:7
+    depends_on:
+      - configsvr1
+      - shard1
+      - shard2
+      - mongos
+    networks:
+      mongo_network:
+    restart: "no"
+    entrypoint: [ "bash", "-c" ]
+    command: >
+      "
+      sleep 10 &&
+      echo 'Initiating config server replica set...' &&
+      mongosh --host 172.38.0.12 --port 27019 --eval '
+        rs.initiate({_id: \"configReplSet\", configsvr: true, members: [{ _id : 0, host : \"172.38.0.12:27019\" }]});
+      ' &&
+      sleep 5 &&
+      echo 'Initiating shard1 replica set...' &&
+      mongosh --host 172.38.0.13 --port 27018 --eval '
+        rs.initiate({_id: \"shard1ReplSet\", members: [{ _id : 0, host : \"172.38.0.13:27018\" }]});
+      ' &&
+      echo 'Initiating shard2 replica set...' &&
+      mongosh --host 172.38.0.14 --port 27017 --eval '
+        rs.initiate({_id: \"shard2ReplSet\", members: [{ _id : 0, host : \"172.38.0.14:27017\" }]});
+      ' &&
+      sleep 5 &&
+      echo 'Adding shards to cluster...' &&
+      mongosh --host mongos --port 27017 --eval '
+        sh.addShard(\"shard1ReplSet/172.38.0.13:27018\");
+        sh.addShard(\"shard2ReplSet/172.38.0.14:27017\");
+      '
+      "
+
+volumes:
+  configsvr1:
+  shard1:
+  shard2:
+
+networks:
+  mongo_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.38.0.0/16
+          gateway: 172.38.0.1
