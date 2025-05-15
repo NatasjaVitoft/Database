@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::net::TcpListener;
+use tower_http::cors::{CorsLayer, Any};
 
 #[tokio::main]
 async fn main() {
@@ -21,6 +22,11 @@ async fn main() {
     // Get the server address and database URL from environment variables
     let server_address = std::env::var("SERVER_ADDRESS").unwrap_or("127.0.0.1:3000".to_owned());
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL not found in env file");
+
+    // Allow any cors origin policy
+    let cors = CorsLayer::new()
+        .allow_origin(Any)
+        .allow_headers(Any);
 
     // Create a connection pool to the PostgreSQL database
     let db_pool = PgPoolOptions::new()
@@ -40,6 +46,7 @@ async fn main() {
     // Create the Axum router and add the needed routes
     let app = Router::new()
         .route("/login", post(login_user))
+        .layer(cors)
         .with_state(db_pool);
 
     // Serve the application using the listener
