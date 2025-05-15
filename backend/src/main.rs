@@ -13,6 +13,10 @@ use sqlx::{postgres::PgPoolOptions, PgPool};
 use tokio::net::TcpListener;
 use tower_http::cors::{CorsLayer, Any};
 
+// MongoDB
+use mongodb::{Client as MongoClient, Database as MongoDatabase};
+use mongodb::bson::oid::ObjectId;
+
 #[tokio::main]
 async fn main() {
 
@@ -22,6 +26,10 @@ async fn main() {
     // Get the server address and database URL from environment variables
     let server_address = std::env::var("SERVER_ADDRESS").unwrap_or("127.0.0.1:3000".to_owned());
     let database_url = std::env::var("DATABASE_URL").expect("DATABASE_URL not found in env file");
+
+    // MongoDB connection string
+    let mongo_connection_string = std::env::var("MONGO_CONNECTION_STRING")
+        .expect("MONGO_CONNECTION_STRING not found in env file");
 
     // Allow any cors origin policy
     let cors = CorsLayer::new()
@@ -36,6 +44,19 @@ async fn main() {
         .await
         .expect("Cannot connect to database");
 
+    // Create a MongoDB client
+    let mongo_client = MongoClient::with_uri_str(&mongo_connection_string)
+        .await
+        .expect("Failed to connect to MongoDB");
+
+    // MongoDB database name
+    let mongo_db_name = std::env::var("MONGO_DB_NAME").expect("MONGO_DB_NAME not found in env file");
+
+    let state = AppState {
+        pg_pool: db_pool,          
+        mongo_db: mongo_client.database(&mongo_db_name),
+    };
+
     let listener = TcpListener::bind(server_address)
         .await
         .expect("Could not create tcp listener");
@@ -43,36 +64,33 @@ async fn main() {
     // Print the address the server is listening on
     println!("listening on {}", listener.local_addr().unwrap());
 
-    // Create the Axum router and add the needed routes
+    // Creating the Axum router and add the needed routes
     let app = Router::new()
         .route("/login", post(login_user))
+        .route("/save_document", post(save_document))
         .layer(cors)
-        .with_state(db_pool);
+        .with_state(state);
 
-    // Serve the application using the listener
+    // Serving the application using the listener
     axum::serve(listener, app)
         .await
         .expect("Error serving application");
 }
 
-
 // ***************************************************************************************************************************************
-
 
 // This function handles the login request
 async fn login_user(
-    // Extract the database connection pool from the state
-    State(db_pool): State<PgPool>,
+    State(state): State<AppState>,
     Json(payload): Json<LoginRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-    // Checks if the user exists in the database
     let user = sqlx::query_as!(
         UserRow,
         "SELECT email, first_name, last_name FROM users WHERE email = $1 AND password = $2",
         payload.email,
         payload.password
     )
-    .fetch_optional(&db_pool)
+    .fetch_optional(&state.pg_pool)
     .await
     .map_err(|e| {
         (
@@ -94,6 +112,32 @@ async fn login_user(
     }
 }
 
+
+// ***************************************************************************************************************************************
+ // This function handles the MongoDB document creation 
+
+async fn save_document(
+    // Extract the state from the request
+    State(state): State<AppState>,
+    Json(mut payload): Json<Document>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    let collection = state.mongo_db.collection::<Document>("documents");
+
+    payload.id = None; // We let MongoDB generate the ID
+
+    // Insert the document into the MongoDB collection
+    match collection.insert_one(payload, None).await {
+        Ok(insert_result) => Ok((
+            StatusCode::CREATED,
+            json!({"inserted_id": insert_result.inserted_id}).to_string(),
+        )),
+        Err(e) => Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({"success": false, "message": e.to_string()}).to_string(),
+        )),
+    }
+}
+
 // ***************************************************************************************************************************************
 
 // Struct for the login request
@@ -112,3 +156,18 @@ struct UserRow {
 }
 
 
+#[derive(Clone)]
+struct AppState {
+    // Add the database connection pool and MongoDB client here
+    pg_pool: PgPool,
+    mongo_db: MongoDatabase,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+struct Document {
+    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
+    id: Option<ObjectId>,
+    title: String,
+    content: String,
+    format: String,
+}
