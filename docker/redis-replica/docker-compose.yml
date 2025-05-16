@@ -1,0 +1,22 @@
+services:
+  redis1:
+    image: redis:7.4.2
+    container_name: redis1
+    restart: always
+    volumes:
+      - redis1:/data
+    ports:
+      - 6379:6379
+
+  redis2:
+    image: redis:7.4.2
+    container_name: redis2
+    restart: always
+    volumes:
+      - redis2:/data
+    ports:
+      - 6380:6379
+    command: redis-server --slaveof redis1 6379
+volumes:
+  redis1:
+  redis2:
