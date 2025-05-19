@@ -68,6 +68,7 @@ async fn main() {
     let app = Router::new()
         .route("/login", post(login_user))
         .route("/save_document", post(save_document))
+        .route("/access_doc", post(access_doc))
         .layer(cors)
         .with_state(state);
 
@@ -139,12 +140,51 @@ async fn save_document(
 }
 
 // ***************************************************************************************************************************************
+// This function handles document content
+
+async fn access_doc(State(state): State<AppState>, Json(mut payload): Json<DocumentRequest>) -> Result<(StatusCode, String), (StatusCode, String)> {
+    // validate user
+
+    let access = user_has_access(payload.user_email, payload.document_id, &state).await;
+
+    if !access {
+        return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
+    }
+    
+    //  TODO: finish logic
+    Ok((StatusCode::OK, "Access granted".to_string()))
+}
+
+async fn user_has_access(email: String, doc_id: String, state: &AppState) -> bool {
+    let user = sqlx::query_as!(
+        RelationRow,
+        "SELECT user_email, document_id, user_role FROM document_relation WHERE user_email = $1 AND document_id = $2 AND user_role = 'owner'",
+        email,
+        doc_id,
+    ).fetch_optional(&state.pg_pool)
+    .await;
+
+    matches!(user, Ok(Some(_)))
+}
+
 
 // Struct for the login request
 #[derive(Deserialize)]
 struct LoginRequest {
     email: String,
     password: String,
+}
+#[derive(Deserialize)]
+struct DocumentRequest {
+    user_email: String,
+    document_id: String,
+}
+
+#[derive(Serialize)]
+struct RelationRow {
+    user_email: String,
+    document_id: String,
+    user_role: String,
 }
 
 // Struct for the user row returned from the database
