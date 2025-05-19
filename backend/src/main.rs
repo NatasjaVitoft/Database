@@ -348,15 +348,14 @@ async fn get_all_documents_shared(
 // This function handles the MongoDB document creation 
 
 async fn save_document(
-    // Extract the state from the request
+
     State(state): State<AppState>,
     Json(mut payload): Json<Document>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let collection = state.mongo_db.collection::<Document>("documents");
 
-    payload.id = None; // We let MongoDB generate the ID
+    payload.id = None; 
 
-    // Insert the document into the MongoDB collection
     match collection.insert_one(payload, None).await {
         Ok(insert_result) => Ok((
             StatusCode::CREATED,
@@ -393,7 +392,6 @@ struct UserRow {
 
 #[derive(Clone)]
 struct AppState {
-    // Add the database connection pool and MongoDB client here
     pg_pool: PgPool,
     mongo_db: MongoDatabase,
 }
