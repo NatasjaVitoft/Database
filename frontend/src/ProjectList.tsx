@@ -1,21 +1,92 @@
 import type { Dispatch } from 'react';
 import { getCollabProjects, getDocumentContent, getOwnedProjects } from './mockdata';
 import type { DocumentData } from './Projects';
+import { use, useContext } from "react";
+import AuthContext from './AuthContext';
+import { useEffect, useState } from "react";
 
+
+interface Project {
+    id: string;
+    title: string;
+    format: string;
+    owner_email: string;
+}
+
+export interface IProjectListProps {
+    setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
+}
+
+/*
 export interface IProjectListProps {
     setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
     email: string
 }
+*/
 
 export function ProjectList({ setDocument, email }: IProjectListProps) {
-    const ownedProjects = getOwnedProjects(email);
-    const sharedProjects = getCollabProjects();
 
+    const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
+
+    const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
+
+    // Useeffect for owned projects
+    
+    useEffect(() => {
+        const to_send = { email };
+
+        fetch("http://localhost:3000/get_all_documents_owner", {
+            method: "POST",
+            headers: {
+                "Content-type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(to_send),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    setOwnedProjects(data.documents);
+                } else {
+                    console.error("Error from server:", data.message);
+                }
+            })
+            .catch((err) => {
+                console.error("Network error:", err);
+            });
+    }, [email]);
+
+    // Useeffect for shared projects
+
+    useEffect(() => {
+        const to_send = { email };
+
+        fetch("http://localhost:3000/get_all_documents_shared", {
+            method: "POST",
+            headers: {
+                "Content-type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(to_send),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    setSharedProjects(data.documents);
+                } else {
+                    console.error("Error from server:", data.message);
+                }
+            })
+            .catch((err) => {
+                console.error("Network error:", err);
+            });
+    }, [email]);
+    
+    
     function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
         // TODO: Implement server fetch
-        const cont = getDocumentContent(doc_id);
-
-        setDocument({ doc_id: doc_id, name: name, content: cont, format: format, owner_email: owner_email })
+        // const cont = getDocumentContent(doc_id);
+        // setDocument({ doc_id: doc_id, name: name, content: cont, format: format, owner_email: owner_email })
     }
 
 
@@ -33,8 +104,8 @@ export function ProjectList({ setDocument, email }: IProjectListProps) {
                     </thead>
                     <tbody>
                         {ownedProjects.map(p => (
-                            <tr key={p.id} onClick={() => handleProjectClick(p.id, p.name, p.format, p.owner_email)}>
-                                <td>{p.name}</td>
+                            <tr key={p.id} onClick={() => handleProjectClick(p.id, p.title, p.format, p.owner_email)}>
+                                <td>{p.title}</td>
                                 <td>{p.format}</td>
                                 <td>{p.owner_email}</td>
                             </tr>
@@ -54,8 +125,8 @@ export function ProjectList({ setDocument, email }: IProjectListProps) {
                     </thead>
                     <tbody>
                         {sharedProjects.map(p => (
-                            <tr key={p.id}>
-                                <td>{p.name}</td>
+                            <tr key={p.id} onClick={() => handleProjectClick(p.id, p.title, p.format, p.owner_email)}>
+                                <td>{p.title}</td>
                                 <td>{p.format}</td>
                                 <td>{p.owner_email}</td>
                             </tr>
