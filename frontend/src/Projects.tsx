@@ -17,15 +17,16 @@ export interface IProjectsProps {
 
 export function Projects({ email }: IProjectsProps) {
   const [document, setDocument] = useState<DocumentData | null>(null);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
 
   return (
     <>
       {document ? (
-        <Document document={document} setDocument={setDocument} />
+        <Document document={document} setDocument={setDocument} socket={socket} />
       ) : (
         <>
           <h2>Projects blebalaw</h2>
-          <ProjectList setDocument={setDocument} email={email} />
+          <ProjectList setDocument={setDocument} email={email} setSocket={setSocket} />
           <CreateProject />
         </>
       )}

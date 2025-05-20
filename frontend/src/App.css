@@ -21,6 +21,10 @@
   border-radius: 1%;
 }
 
+.error {
+  color: rgb(197, 48, 48);
+}
+
 .login-form {
   padding: 2rem;
   width: 300px;

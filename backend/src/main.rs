@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use axum::routing::get;
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 
 use serde::{Deserialize, Serialize};
@@ -11,6 +12,8 @@ use tower_http::cors::{Any, CorsLayer};
 // MongoDB
 use mongodb::bson::oid::ObjectId;
 use mongodb::{Client as MongoClient, Database as MongoDatabase};
+
+mod ws_handler;
 
 #[tokio::main]
 async fn main() {
@@ -61,7 +64,7 @@ async fn main() {
     let app = Router::new()
         .route("/login", post(login_user))
         .route("/save_document", post(save_document))
-        .route("/access_doc", post(access_doc))
+        .route("/ws", get(ws_handler::ws_handler))
         .route("/save_document_and_relations", post(save_document_and_relations))
         .route("/get_all_documents_owner", post(get_all_documents_owner))
         .route("/get_all_documents_shared", post(get_all_documents_shared))
@@ -362,35 +365,7 @@ async fn save_document(
 }
 
 // ***************************************************************************************************************************************
-// This function handles document content
-
-async fn access_doc(
-    State(state): State<AppState>,
-    Json(mut payload): Json<DocumentRequest>,
-) -> Result<(StatusCode, String), (StatusCode, String)> {
-    // validate user
-
-    let access = user_has_access(payload.user_email, payload.document_id, &state).await;
-
-    if !access {
-        return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
-    }
-
-    //  TODO: finish logic
-    Ok((StatusCode::OK, "Access granted".to_string()))
-}
-
-async fn user_has_access(email: String, doc_id: String, state: &AppState) -> bool {
-    let user = sqlx::query_as!(
-        RelationRow,
-        "SELECT user_email, document_id, user_role FROM document_relation WHERE user_email = $1 AND document_id = $2 AND user_role = 'owner'",
-        email,
-        doc_id,
-    ).fetch_optional(&state.pg_pool)
-    .await;
-
-    matches!(user, Ok(Some(_)))
-}
+// This function handles websocket requests and connections
 
 // Struct for the login request
 #[derive(Deserialize)]
@@ -402,11 +377,6 @@ struct LoginRequest {
 #[derive(Deserialize)]
 pub struct GetDocumentRequest {
     pub email: String,
-}
-#[derive(Deserialize)]
-struct DocumentRequest {
-    user_email: String,
-    document_id: String,
 }
 
 #[derive(Serialize)]
@@ -425,7 +395,7 @@ struct UserRow {
 }
 
 #[derive(Clone)]
-struct AppState {
+pub struct AppState {
     pg_pool: PgPool,
     mongo_db: MongoDatabase,
 }
@@ -438,7 +408,6 @@ struct Document {
     content: String,
     format: String,
 }
-
 
 #[derive(Deserialize, Serialize, Debug)]
 struct DocumentCreateRequest {

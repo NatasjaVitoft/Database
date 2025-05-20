@@ -15,6 +15,7 @@ interface Project {
 
 export interface IProjectListProps {
     setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
+    setSocket: Dispatch<React.SetStateAction<WebSocket | null>>
 }
 
 /*
@@ -24,14 +25,17 @@ export interface IProjectListProps {
 }
 */
 
-export function ProjectList({ setDocument, email }: IProjectListProps) {
+export function ProjectList({ setDocument, email, setSocket }: IProjectListProps) {
 
     const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
 
     const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
 
-    // Useeffect for owned projects
+    const [error, setError] = useState<string | null>(null);
     
+
+    // Useeffect for owned projects
+
     useEffect(() => {
         const to_send = { email };
 
@@ -49,6 +53,7 @@ export function ProjectList({ setDocument, email }: IProjectListProps) {
                     setOwnedProjects(data.documents);
                 } else {
                     console.error("Error from server:", data.message);
+                    setError(data.message);
                 }
             })
             .catch((err) => {
@@ -81,12 +86,41 @@ export function ProjectList({ setDocument, email }: IProjectListProps) {
                 console.error("Network error:", err);
             });
     }, [email]);
-    
-    
+
+
     function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
         // TODO: Implement server fetch
-        // const cont = getDocumentContent(doc_id);
-        // setDocument({ doc_id: doc_id, name: name, content: cont, format: format, owner_email: owner_email })
+        const socket = new WebSocket(`ws://localhost:3000/ws?user_email=${encodeURIComponent(email)}&document_id=${encodeURIComponent(doc_id)}`);
+
+        // Handle connection open
+        socket.onopen = () => {
+            console.log("WebSocket connection established");
+            setSocket(socket);
+        };
+
+        // Handle incoming messages
+        socket.onmessage = (event) => {
+            console.log("Message from server:", event.data);
+
+            const document: DocumentData = {
+                doc_id: doc_id,
+                name: name,
+                content: event.data,
+                format: format,
+                owner_email: owner_email,
+            }
+            setDocument(document);
+        };
+
+        // Handle errors
+        socket.onerror = (event) => {
+            console.error("WebSocket error:", event);
+        };
+
+        // Handle connection close
+        socket.onclose = () => {
+            console.log("WebSocket connection closed");
+        };
     }
 
 
@@ -94,6 +128,7 @@ export function ProjectList({ setDocument, email }: IProjectListProps) {
         <div className='list-container'>
             <div className='col'>
                 <h3>Your projects</h3>
+                <p className='error'>{error}</p>
                 <table>
                     <thead>
                         <tr>
