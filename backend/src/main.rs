@@ -1,25 +1,19 @@
 use std::time::Duration;
 
-use axum::{
-    extract::{State},
-    http::StatusCode,
-    routing::post,
-    Json, Router,
-};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
-use tower_http::cors::{CorsLayer, Any};
+use tower_http::cors::{Any, CorsLayer};
 
 // MongoDB
-use mongodb::{Client as MongoClient, Database as MongoDatabase};
 use mongodb::bson::oid::ObjectId;
+use mongodb::{Client as MongoClient, Database as MongoDatabase};
 
 #[tokio::main]
 async fn main() {
-
     // Load environment variables from .env file
     dotenvy::dotenv().expect("Enviroment file doesn not exist");
 
@@ -32,9 +26,7 @@ async fn main() {
         .expect("MONGO_CONNECTION_STRING not found in env file");
 
     // Allow any cors origin policy
-    let cors = CorsLayer::new()
-        .allow_origin(Any)
-        .allow_headers(Any);
+    let cors = CorsLayer::new().allow_origin(Any).allow_headers(Any);
 
     // Create a connection pool to the PostgreSQL database
     let db_pool = PgPoolOptions::new()
@@ -50,10 +42,11 @@ async fn main() {
         .expect("Failed to connect to MongoDB");
 
     // MongoDB database name
-    let mongo_db_name = std::env::var("MONGO_DB_NAME").expect("MONGO_DB_NAME not found in env file");
+    let mongo_db_name =
+        std::env::var("MONGO_DB_NAME").expect("MONGO_DB_NAME not found in env file");
 
     let state = AppState {
-        pg_pool: db_pool,          
+        pg_pool: db_pool,
         mongo_db: mongo_client.database(&mongo_db_name),
     };
 
@@ -113,9 +106,8 @@ async fn login_user(
     }
 }
 
-
 // ***************************************************************************************************************************************
- // This function handles the MongoDB document creation 
+// This function handles the MongoDB document creation
 
 async fn save_document(
     // Extract the state from the request
@@ -142,7 +134,10 @@ async fn save_document(
 // ***************************************************************************************************************************************
 // This function handles document content
 
-async fn access_doc(State(state): State<AppState>, Json(mut payload): Json<DocumentRequest>) -> Result<(StatusCode, String), (StatusCode, String)> {
+async fn access_doc(
+    State(state): State<AppState>,
+    Json(mut payload): Json<DocumentRequest>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
     // validate user
 
     let access = user_has_access(payload.user_email, payload.document_id, &state).await;
@@ -150,7 +145,7 @@ async fn access_doc(State(state): State<AppState>, Json(mut payload): Json<Docum
     if !access {
         return Err((StatusCode::UNAUTHORIZED, "Unauthorized".to_string()));
     }
-    
+
     //  TODO: finish logic
     Ok((StatusCode::OK, "Access granted".to_string()))
 }
@@ -166,7 +161,6 @@ async fn user_has_access(email: String, doc_id: String, state: &AppState) -> boo
 
     matches!(user, Ok(Some(_)))
 }
-
 
 // Struct for the login request
 #[derive(Deserialize)]
@@ -194,7 +188,6 @@ struct UserRow {
     first_name: String,
     last_name: String,
 }
-
 
 #[derive(Clone)]
 struct AppState {
