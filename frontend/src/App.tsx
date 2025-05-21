@@ -3,6 +3,7 @@ import { Login } from './Login';
 import AuthContext from './AuthContext';
 import { Projects } from './Projects';
 import './App.css'
+import { WSProvider } from './WSContextProvider';
 
 function App() {
   const { isLoggedIn, setIsLoggedIn, email, setEmail } = useContext(AuthContext);
@@ -12,7 +13,9 @@ function App() {
       {email ? (
         <div>
           <h1>Welcome {email}!</h1>
-          <Projects email={email}/>
+          <WSProvider>
+            <Projects email={email} />
+          </WSProvider>
         </div>
       ) :
         <div>

@@ -1,9 +1,7 @@
 import type { Dispatch } from 'react';
-import { getCollabProjects, getDocumentContent, getOwnedProjects } from './mockdata';
 import type { DocumentData } from './Projects';
-import { use, useContext } from "react";
-import AuthContext from './AuthContext';
 import { useEffect, useState } from "react";
+import { useWebSocket } from './WSContext';
 
 
 interface Project {
@@ -15,7 +13,7 @@ interface Project {
 
 export interface IProjectListProps {
     setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
-    setSocket: Dispatch<React.SetStateAction<WebSocket | null>>
+    email: string;
 }
 
 /*
@@ -25,7 +23,8 @@ export interface IProjectListProps {
 }
 */
 
-export function ProjectList({ setDocument, email, setSocket }: IProjectListProps) {
+export function ProjectList({ setDocument, email  }: IProjectListProps) {
+    const { connect } = useWebSocket();
 
     const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
 
@@ -89,38 +88,19 @@ export function ProjectList({ setDocument, email, setSocket }: IProjectListProps
 
 
     function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
-        // TODO: Implement server fetch
-        const socket = new WebSocket(`ws://localhost:3000/ws?user_email=${encodeURIComponent(email)}&document_id=${encodeURIComponent(doc_id)}`);
 
-        // Handle connection open
-        socket.onopen = () => {
-            console.log("WebSocket connection established");
-            setSocket(socket);
-        };
+        const url = `ws://localhost:3000/ws?user_email=${encodeURIComponent(email)}&document_id=${encodeURIComponent(doc_id)}`;
 
-        // Handle incoming messages
-        socket.onmessage = (event) => {
-            console.log("Message from server:", event.data);
-
+        connect(url, (event) => {
             const document: DocumentData = {
-                doc_id: doc_id,
-                name: name,
+                doc_id,
+                name,
                 content: event.data,
-                format: format,
-                owner_email: owner_email,
-            }
+                format,
+                owner_email,
+            };
             setDocument(document);
-        };
-
-        // Handle errors
-        socket.onerror = (event) => {
-            console.error("WebSocket error:", event);
-        };
-
-        // Handle connection close
-        socket.onclose = () => {
-            console.log("WebSocket connection closed");
-        };
+        });
     }
 
 

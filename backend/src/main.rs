@@ -365,7 +365,6 @@ async fn save_document(
 }
 
 // ***************************************************************************************************************************************
-// This function handles websocket requests and connections
 
 // Struct for the login request
 #[derive(Deserialize)]

@@ -1,24 +1,33 @@
-import { useState, type ChangeEvent, type Dispatch } from "react";
+import { useEffect, type ChangeEvent, type Dispatch } from "react";
 import type { DocumentData } from "./Projects";
+import { useWebSocket } from "./WSContext";
 
-export interface IDocumentProps {
+export interface IDocumentEditorProps {
     document: DocumentData,
     setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
-    socket: WebSocket | null,
 }
 
 
-export function Document({ document, setDocument, socket }: IDocumentProps) {
+export function DocumentEditor({ document, setDocument}: IDocumentEditorProps) {
+    const { sendMessage, disconnect, connect } = useWebSocket();
 
+//  FIXME: Always closes connection on render bc StrictMode
+/*     useEffect(() => {
+        // when the component unmounts
+        return () => {
+            disconnect();
+        };
+      }, );
+ */
 
     function onExit() {
+        disconnect();
         setDocument(null);
-        socket?.close()
     }
 
     function handleChange(e: ChangeEvent<HTMLTextAreaElement>) {
         // setDocument({...document, ['content']: e.target.value})
-        socket?.send(e.target.value);
+        sendMessage(e.target.value);
     }
 
     return (

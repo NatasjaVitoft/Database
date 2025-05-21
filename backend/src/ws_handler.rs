@@ -1,17 +1,18 @@
+use std::error::Error;
+
 use crate::*;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, WebSocketUpgrade};
 use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode};
-use futures_util::future::OrElse;
 use futures_util::{SinkExt, StreamExt};
 use mongodb::bson::doc;
-use mongodb::{Client as MongoClient, Database as MongoDatabase};
-use serde::{Deserialize, Serialize};
-use sqlx::PgPool;
+use serde::Deserialize;
+use tokio::time;
 
 // Redis
 use redis::AsyncCommands;
+use redis::aio::ConnectionManager;
 
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
@@ -23,6 +24,10 @@ pub async fn ws_handler(
     let access = user_has_access(&params.user_email, &params.document_id, &state).await;
 
     if !access {
+        println!(
+            "Refused access to user: {} on doc: {}",
+            &params.user_email, &params.document_id
+        );
         return (StatusCode::UNAUTHORIZED, "Unauthorized".to_string()).into_response();
     }
 
@@ -35,8 +40,6 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
         params.user_email, params.document_id
     );
 
-    // TODO: Check if doc is already in redis store
-
     // Connect to Redis
     let doc_key = format!("doc:{}", params.document_id);
     let channel = format!("channel:{}", params.document_id);
@@ -46,16 +49,19 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
 
     let redis_client = redis::Client::open(redis_conn_str).expect("Failed to create Redis client");
     let mut conn = redis_client
-        .get_tokio_connection()
+        .get_tokio_connection_manager()
         .await
         .expect("Failed to connect to Redis");
+
+    let mut conn_flush = conn.clone();
+    let mut conn_close = conn.clone();
 
     let doc_exists: bool = conn.exists(&doc_key).await.unwrap_or(false);
 
     if !doc_exists {
         if let Ok(object_id) = ObjectId::parse_str(&params.document_id) {
             let filter = doc! { "_id": object_id };
-    
+
             if let Ok(Some(doc)) = state
                 .mongo_db
                 .collection::<Document>("documents")
@@ -64,7 +70,7 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
             {
                 let content = doc.content.clone();
                 println!("Some document content: {}", content);
-    
+
                 let _: () = conn.set(&doc_key, content.clone()).await.unwrap();
             } else {
                 println!("No content was found with that ObjectId");
@@ -103,44 +109,91 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
 
         while let Some(msg) = pubsub_stream.next().await {
             if let Ok(payload) = msg.get_payload::<String>() {
-                let _ = sender.send(Message::Text(payload)).await;
+                if let Err(e) = sender.send(Message::Text(payload)).await {
+                    println!("Failed Websocket send: {:?}", e);
+                    break;
+                };
             }
         }
     });
 
-    // You could also listen to messages from the client and forward them to Redis
+    let doc_key_flush = doc_key.clone();
+    let doc_key_close = doc_key.clone();
+
+    // listen to messages from the client and forward them to Redis
     let ws_to_redis = tokio::spawn(async move {
         while let Some(Ok(msg)) = receiver.next().await {
-            if let Message::Text(text) = msg {
-                // Update Redis doc value
-                let _: () = conn.set(&doc_key, &text).await.unwrap();
+            match msg {
+                Message::Text(text) => {
+                    // Update Redis doc value
+                    let _: () = conn.set(&doc_key, &text).await.unwrap();
 
-                // Publish to other clients
-                let _: () = conn.publish(&channel, &text).await.unwrap();
+                    // Publish to other clients
+                    let _: () = conn.publish(&channel, &text).await.unwrap();
+                }
+                Message::Close(frame) => {
+                    println!("Close connection received: {:?}", frame);
+                    return;
+                }
+                // Other message types are note handled for now
+                _ => {}
             }
         }
     });
 
-    // Await both tasks
-    let _ = tokio::join!(redis_to_ws, ws_to_redis);
-
-    /*     while let Some(Ok(Message::Text(msg))) = socket.next().await {
-        println!("Received: {}", msg);
-        if socket
-            .send(Message::Text(format!("Echo: {}", msg)))
-            .await
-            .is_err()
-        {
-            break;
+    let doc_id = &params.document_id.clone();
+    let state_close = &state.clone();
+    let flush_timer = tokio::spawn(async move {
+        loop {
+            time::sleep(time::Duration::from_secs(10)).await;
+            let _ = flush_mongo(&state, &params.document_id, &doc_key_flush, &mut conn_flush)
+                .await
+                .map_err(|e| {
+                    println!(
+                        "Error on timed flush doc with id: {} Error: {}",
+                        &params.document_id, e
+                    );
+                });
         }
-    } */
+    });
+
+    // Await socket receiver. Flush when client breaks connection and abort listener/sender processes
+    let _ = ws_to_redis.await;
+    let _ = flush_mongo(&state_close, &doc_id, &doc_key_close, &mut conn_close)
+        .await
+        .map_err(|e| {
+            println!("Error on close flush doc with id: {} Error: {}", &doc_id, e);
+        });
+    redis_to_ws.abort();
+    flush_timer.abort();
+
     println!("WebSocket closed");
+}
+
+async fn flush_mongo(
+    state: &AppState,
+    document_id: &String,
+    doc_key_flush: &String,
+    conn: &mut ConnectionManager,
+) -> Result<(), Box<dyn Error>> {
+    let content: String = conn.get(doc_key_flush).await?;
+    let obj_id = ObjectId::parse_str(document_id)?;
+    let filter = doc! { "_id": obj_id };
+    let cont = doc! { "$set": {"content": content}};
+    state
+        .mongo_db
+        .collection::<Document>("documents")
+        .find_one_and_update(filter, cont, None)
+        .await?;
+
+    println!("Timed flush for doc: {}", document_id);
+    Ok(())
 }
 
 async fn user_has_access(email: &String, doc_id: &String, state: &AppState) -> bool {
     let user = sqlx::query_as!(
         RelationRow,
-        "SELECT user_email, document_id, user_role FROM document_relation WHERE user_email = $1 AND document_id = $2 AND user_role = 'owner'",
+        "SELECT user_email, document_id, user_role FROM document_relation WHERE user_email = $1 AND document_id = $2 AND user_role = 'owner' OR user_role = 'editor'",
         email,
         doc_id,
     ).fetch_optional(&state.pg_pool)
