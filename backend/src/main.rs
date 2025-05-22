@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 
 use axum::routing::get;
@@ -7,11 +9,15 @@ use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
+use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
 
 // MongoDB
 use mongodb::bson::oid::ObjectId;
 use mongodb::{Client as MongoClient, Database as MongoDatabase};
+
+// For counting connections across threads
+pub type WSConnections = Arc<Mutex<HashMap<String, usize>>>;
 
 mod ws_handler;
 
@@ -51,6 +57,7 @@ async fn main() {
     let state = AppState {
         pg_pool: db_pool,
         mongo_db: mongo_client.database(&mongo_db_name),
+        ws_connections: Arc::new(Mutex::new(HashMap::new())),
     };
 
     let listener = TcpListener::bind(server_address)
@@ -397,6 +404,7 @@ struct UserRow {
 pub struct AppState {
     pg_pool: PgPool,
     mongo_db: MongoDatabase,
+    ws_connections: Arc<Mutex<HashMap<String, usize>>>,
 }
 
 #[derive(Deserialize, Serialize, Debug)]

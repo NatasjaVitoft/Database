@@ -85,7 +85,11 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
 
     // Send the full content to the client first
     match socket.send(Message::Text(content.clone())).await {
-        Ok(x) => x,
+        Ok(_) => {
+            // Count active client on success
+            let mut map = state.ws_connections.lock().await;
+            *map.entry(params.document_id.clone()).or_insert(0) += 1;
+        }
         Err(e) => {
             println!("Error while sending content to client: {e:?}");
             return;
@@ -143,6 +147,8 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
 
     let doc_id = &params.document_id.clone();
     let state_close = &state.clone();
+
+    // TODO: make it standalone and flush all connections at once.
     let flush_timer = tokio::spawn(async move {
         loop {
             time::sleep(time::Duration::from_secs(10)).await;
@@ -157,17 +163,44 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
         }
     });
 
+    // TODO: clear Redis data
+
     // Await socket receiver. Flush when client breaks connection and abort listener/sender processes
     let _ = ws_to_redis.await;
-    let _ = flush_mongo(&state_close, &doc_id, &doc_key_close, &mut conn_close)
-        .await
-        .map_err(|e| {
-            println!("Error on close flush doc with id: {} Error: {}", &doc_id, e);
-        });
+
     redis_to_ws.abort();
     flush_timer.abort();
 
-    println!("WebSocket closed");
+    // Flush MongoDB and clear Redis on last client disconnect
+    let mut map = state_close.ws_connections.lock().await;
+
+    match map.get_mut(doc_id) {
+        Some(count) => {
+            *count -= 1;
+            if *count <= 0 {
+                println!("No more clients connected to: {}", &doc_key_close);
+                if let Ok(_) = flush_mongo(&state_close, &doc_id, &doc_key_close, &mut conn_close)
+                    .await
+                    .map_err(|e| {
+                        println!("Error on close flush doc with id: {} Error: {}", &doc_id, e);
+                    })
+                {
+                    println!("Close Mongo flush for {}", &doc_key_close);
+                    if let Ok(()) = conn_close.del(&doc_key_close).await.map_err(|e| {
+                        println!("Failed to delete Redis key: {}", e);
+                    }) {
+                        map.remove(doc_id);
+                        println!("Removed Redis key: {} ", doc_key_close);
+                    }
+                }
+            }
+        }
+        None => {
+            println!("No ws_connections count found for id: {}", doc_id);
+        }
+    }
+
+    println!("WebSocket closed for user {} on doc: {}", params.user_email, doc_id);
 }
 
 async fn flush_mongo(
@@ -185,8 +218,6 @@ async fn flush_mongo(
         .collection::<Document>("documents")
         .find_one_and_update(filter, cont, None)
         .await?;
-
-    println!("Timed flush for doc: {}", document_id);
     Ok(())
 }
 
