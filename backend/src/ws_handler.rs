@@ -73,10 +73,10 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
 
                 let _: () = conn.set(&doc_key, content.clone()).await.unwrap();
             } else {
-                println!("No content was found with that ObjectId");
+                eprintln!("No content was found with objectId: {}", object_id);
             }
         } else {
-            println!("Invalid ObjectId format: {}", &params.document_id);
+            eprintln!("Invalid ObjectId format: {}", &params.document_id);
         }
     }
 
@@ -91,7 +91,7 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
             *map.entry(params.document_id.clone()).or_insert(0) += 1;
         }
         Err(e) => {
-            println!("Error while sending content to client: {e:?}");
+            eprintln!("Error while sending content to client: {e:?}");
             return;
         }
     }
@@ -114,7 +114,7 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
         while let Some(msg) = pubsub_stream.next().await {
             if let Ok(payload) = msg.get_payload::<String>() {
                 if let Err(e) = sender.send(Message::Text(payload)).await {
-                    println!("Failed Websocket send: {:?}", e);
+                    eprintln!("Failed Websocket send: {:?}", e);
                     break;
                 };
             }
@@ -155,15 +155,13 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
             let _ = flush_mongo(&state, &params.document_id, &doc_key_flush, &mut conn_flush)
                 .await
                 .map_err(|e| {
-                    println!(
+                    eprintln!(
                         "Error on timed flush doc with id: {} Error: {}",
                         &params.document_id, e
                     );
                 });
         }
     });
-
-    // TODO: clear Redis data
 
     // Await socket receiver. Flush when client breaks connection and abort listener/sender processes
     let _ = ws_to_redis.await;
@@ -182,12 +180,12 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
                 if let Ok(_) = flush_mongo(&state_close, &doc_id, &doc_key_close, &mut conn_close)
                     .await
                     .map_err(|e| {
-                        println!("Error on close flush doc with id: {} Error: {}", &doc_id, e);
+                        eprintln!("Error on close flush doc with id: {} Error: {}", &doc_id, e);
                     })
                 {
                     println!("Close Mongo flush for {}", &doc_key_close);
                     if let Ok(()) = conn_close.del(&doc_key_close).await.map_err(|e| {
-                        println!("Failed to delete Redis key: {}", e);
+                        eprintln!("Failed to delete Redis key: {}", e);
                     }) {
                         map.remove(doc_id);
                         println!("Removed Redis key: {} ", doc_key_close);
@@ -196,11 +194,14 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
             }
         }
         None => {
-            println!("No ws_connections count found for id: {}", doc_id);
+            eprintln!("No ws_connections count found for id: {}", doc_id);
         }
     }
 
-    println!("WebSocket closed for user {} on doc: {}", params.user_email, doc_id);
+    println!(
+        "WebSocket closed for user {} on doc: {}",
+        params.user_email, doc_id
+    );
 }
 
 async fn flush_mongo(
