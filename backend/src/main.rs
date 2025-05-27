@@ -11,6 +11,7 @@ use sqlx::{PgPool, postgres::PgPoolOptions};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tower_http::cors::{Any, CorsLayer};
+use sqlx::{Postgres, Row, Transaction};
 
 // MongoDB
 use mongodb::bson::oid::ObjectId;
@@ -75,6 +76,7 @@ async fn main() {
         .route("/save_document_and_relations", post(save_document_and_relations))
         .route("/get_all_documents_owner", post(get_all_documents_owner))
         .route("/get_all_documents_shared", post(get_all_documents_shared))
+        .route("/create_group", post(create_groups))
         .layer(cors)
         .with_state(state);
 
@@ -347,6 +349,76 @@ async fn get_all_documents_shared(
 }
 
 
+// ADD GROUPS INTO POSTGRES TABLE
+
+pub async fn create_groups(
+    State(state): State<AppState>,
+    Json(payload): Json<Vec<GroupsRequest>>, 
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    
+    for group in payload {
+        // Start transaction
+        let mut tx: Transaction<'_, Postgres> = state.pg_pool.begin().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({ "success": false, "message": format!("Failed to start transaction: {}", e) }).to_string(),
+            )
+        })?;
+
+        // Insert group
+        let query_groups = sqlx::query(
+            "INSERT INTO groups (group_name, owner_email, group_role) VALUES ($1, $2, $3) RETURNING group_id"
+        )
+        .bind(&group.name)       // changed from group.group_name to group.name
+        .bind(&group.owner)      // unchanged, matches struct
+        .bind(&group.role)       // changed from group.group_role to group.role
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({ "success": false, "message": format!("Error inserting group: {}", e) }).to_string(),
+            )
+        })?;
+
+        let group_id: i32 = query_groups.try_get("group_id").map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({ "success": false, "message": format!("Failed to get group_id: {}", e) }).to_string(),
+            )
+        })?;
+
+        // Insert each member
+        for member_email in group.members.iter() {
+            sqlx::query(
+                "INSERT INTO group_members (group_id, member_email) VALUES ($1, $2)"
+            )
+            .bind(group_id)
+            .bind(member_email)
+            .execute(&mut *tx)
+            .await
+            .map_err(|e| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    json!({ "success": false, "message": format!("Error inserting group member: {}", e) }).to_string(),
+                )
+            })?;
+        }
+
+        tx.commit().await.map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({ "success": false, "message": format!("Failed to commit transaction: {}", e) }).to_string(),
+            )
+        })?;
+    }
+
+    Ok((
+        StatusCode::CREATED,
+        json!({ "success": true, "message": "Groups created successfully" }).to_string()
+    ))
+}
+
 // ***************************************************************************************************************************************
 // This function handles the MongoDB document creation
 
@@ -423,4 +495,13 @@ struct DocumentCreateRequest {
     collaborators: Vec<String>, 
     readers: Vec<String>,       
     owner: String,             
+}
+
+// STRUCT FOR GROUPS REQUEST
+#[derive(Deserialize, Serialize, Debug)]
+pub struct GroupsRequest {
+    pub owner: String,
+    pub name: String,
+    pub role: String,
+    pub members: Vec<String>,
 }

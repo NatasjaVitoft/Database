@@ -43,7 +43,7 @@ export default function CreateGroup(props: ICreateGroupProps) {
                 "Content-type": "application/json",
                 Accept: "application/json",
             },
-            body: JSON.stringify(to_send),
+            body: JSON.stringify([to_send]),
         };
 
         fetch("http://localhost:3000/create_group", opts)
