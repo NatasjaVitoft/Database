@@ -77,6 +77,7 @@ async fn main() {
         .route("/get_all_documents_owner", post(get_all_documents_owner))
         .route("/get_all_documents_shared", post(get_all_documents_shared))
         .route("/create_group", post(create_groups))
+        .route("/get_groups_by_owner", post(get_groups_by_owner))
         .layer(cors)
         .with_state(state);
 
@@ -419,6 +420,39 @@ pub async fn create_groups(
     ))
 }
 
+
+async fn get_groups_by_owner(
+    State(state): State<AppState>,
+    Json(payload): Json<GetDocumentRequest>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    let rows = sqlx::query!(
+        "SELECT group_name, owner_email, group_role FROM groups WHERE owner_email = $1",
+        payload.email
+    )
+    .fetch_all(&state.pg_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({ "success": false, "message": e.to_string() }).to_string(),
+        )
+    })?;
+
+    let groups: Vec<_> = rows
+        .into_iter()
+        .map(|row| json!({
+            "group_name": row.group_name,
+            "owner_email": row.owner_email,
+            "group_role": row.group_role,
+        }))
+        .collect();
+
+    Ok((
+        StatusCode::OK,
+        json!({ "success": true, "groups": groups }).to_string(),
+    ))
+}
+
 // ***************************************************************************************************************************************
 // This function handles the MongoDB document creation
 
@@ -442,6 +476,8 @@ async fn save_document(
         )),
     }
 }
+
+
 
 // ***************************************************************************************************************************************
 
@@ -504,4 +540,9 @@ pub struct GroupsRequest {
     pub name: String,
     pub role: String,
     pub members: Vec<String>,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct GetGroupsRequest {
+     pub email: String,
 }
