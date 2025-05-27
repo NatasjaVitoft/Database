@@ -50,7 +50,7 @@ export function Projects({ email }: IProjectsProps) {
           />
           <div className="list-container">
             <div className="col">
-              <CreateProject groups={groups} />
+              <CreateProject groups={groups} setGroups={setGroups} />
             </div>
             <div className="col">
               <CreateGroup />

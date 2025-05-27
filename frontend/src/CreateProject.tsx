@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent, type Dispatch, type FormEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type Dispatch, type FormEvent } from "react";
 
 import { useContext } from "react";
 import AuthContext from "./AuthContext";
@@ -10,10 +10,9 @@ export interface ICreateProjectProps {
     setGroups: Dispatch<React.SetStateAction<Group[]>>
  }
 
-export function CreateProject({ groups }) {
+export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
 
-    const { email } = useContext(AuthContext);
-
+    
     const init = {
         name: "",
         format: "",
@@ -22,8 +21,11 @@ export function CreateProject({ groups }) {
         groups: "",
     };
 
+    const { email } = useContext(AuthContext);
     const [projectInfo, setProjectInfo] = useState(init);
+    const [error, setError] = useState<string>('');
 
+    
     function handleInput(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         setProjectInfo({ ...projectInfo, [e.target.id]: e.target.value });
         console.log(projectInfo);
@@ -65,6 +67,32 @@ export function CreateProject({ groups }) {
         });
     } 
 
+    useEffect(() => {
+        const to_send = { email };
+
+        fetch("http://localhost:3000/get_groups_by_owner", {
+            method: "POST",
+            headers: {
+                "Content-type": "application/json",
+                Accept: "application/json",
+            },
+            body: JSON.stringify(to_send),
+        })
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.success) {
+                    setGroups(data.groups);
+                } else {
+                    console.error("Error from server:", data.message);
+                    setError(data.message);
+                }
+            })
+            .catch((err) => {
+                console.error("Network error:", err);
+            });
+            return () => {};
+    }, [groups, email]);
+
     return (
         <div className="login-form">
             <h3>Create Project</h3>
@@ -91,6 +119,7 @@ export function CreateProject({ groups }) {
                     })}
                 </select>
                 <button type="submit">Create Project</button>
+                <p>{error}</p>
             </form>
         </div>
     );
