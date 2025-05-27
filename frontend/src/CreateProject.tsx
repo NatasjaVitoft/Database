@@ -1,11 +1,16 @@
-import { useState, type ChangeEvent, type FormEvent } from "react";
+import { useState, type ChangeEvent, type Dispatch, type FormEvent } from "react";
 
 import { useContext } from "react";
 import AuthContext from "./AuthContext";
+import { stringToArray } from "./api-util";
+import type { Group } from "./Projects";
 
-export interface ICreateProjectProps { }
+export interface ICreateProjectProps {
+    groups: Group[]
+    setGroups: Dispatch<React.SetStateAction<Group[]>>
+ }
 
-export function CreateProject(props: ICreateProjectProps) {
+export function CreateProject({ groups, setGroups }) {
 
     const { email } = useContext(AuthContext);
 
@@ -21,20 +26,6 @@ export function CreateProject(props: ICreateProjectProps) {
     function handleInput(e: ChangeEvent<HTMLInputElement>) {
         setProjectInfo({ ...projectInfo, [e.target.id]: e.target.value });
         console.log(projectInfo);
-    }
-
-    function stringToArray(str: string): string[] {
-        if (str) {
-            return str
-                .split(",")
-                .map((s) => {
-                    return s.trim();
-                })
-                .filter((s) => {
-                    return s.length > 1;
-                });
-        }
-        return [];
     }
 
     function onCreateProject(e: FormEvent<HTMLFormElement>) {
@@ -75,6 +66,7 @@ export function CreateProject(props: ICreateProjectProps) {
 
     return (
         <div className="login-form">
+            <h3>Create Project</h3>
             <form onSubmit={onCreateProject}>
                 <label>
                     Project name
@@ -92,7 +84,7 @@ export function CreateProject(props: ICreateProjectProps) {
                     Reader(s) (E-mail separated with ',')
                     <input type="text" id="reader" onChange={handleInput} />
                 </label>
-                <button type="submit">Create</button>
+                <button type="submit">Create Project</button>
             </form>
         </div>
     );

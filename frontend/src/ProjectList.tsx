@@ -1,34 +1,20 @@
 import type { Dispatch } from 'react';
-import type { DocumentData } from './Projects';
+import type { DocumentData, Project } from './Projects';
 import { useEffect, useState } from "react";
 import { useWebSocket } from './WSContext';
 
 
-interface Project {
-    id: string;
-    title: string;
-    format: string;
-    owner_email: string;
-}
-
 export interface IProjectListProps {
-    setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
     email: string;
-}
-
-/*
-export interface IProjectListProps {
     setDocument: Dispatch<React.SetStateAction<DocumentData | null>>;
-    email: string
+    ownedProjects: Project[];
+    setOwnedProjects: Dispatch<React.SetStateAction<Project[]>>;
+    sharedProjects: Project[];
+    setSharedProjects: Dispatch<React.SetStateAction<Project[]>>;
 }
-*/
 
-export function ProjectList({ setDocument, email  }: IProjectListProps) {
+export function ProjectList({ setDocument, email, ownedProjects, setOwnedProjects, sharedProjects, setSharedProjects }: IProjectListProps) {
     const { connect } = useWebSocket();
-
-    const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
-
-    const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
 
     const [error, setError] = useState<string | null>(null);
     
@@ -58,7 +44,7 @@ export function ProjectList({ setDocument, email  }: IProjectListProps) {
             .catch((err) => {
                 console.error("Network error:", err);
             });
-    }, [email]);
+    }, [email, ownedProjects, setOwnedProjects, sharedProjects, setSharedProjects]);
 
     // Useeffect for shared projects
 

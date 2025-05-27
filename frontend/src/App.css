@@ -52,6 +52,13 @@
   border: 1px solid #ccc;
   border-radius: 4px;
 }
+.login-form select {
+  margin-top: 0.3rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
 
 button {
   padding: 0.7rem;
