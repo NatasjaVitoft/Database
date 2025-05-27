@@ -426,7 +426,7 @@ async fn get_groups_by_owner(
     Json(payload): Json<GetDocumentRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let rows = sqlx::query!(
-        "SELECT group_name, owner_email, group_role FROM groups WHERE owner_email = $1",
+        "SELECT group_id, group_name, owner_email, group_role FROM groups WHERE owner_email = $1",
         payload.email
     )
     .fetch_all(&state.pg_pool)
@@ -444,6 +444,7 @@ async fn get_groups_by_owner(
             "group_name": row.group_name,
             "owner_email": row.owner_email,
             "group_role": row.group_role,
+            "group_id": row.group_id,
         }))
         .collect();
 

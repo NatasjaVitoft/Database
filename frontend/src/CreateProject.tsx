@@ -8,11 +8,11 @@ import type { Group } from "./Projects";
 export interface ICreateProjectProps {
     groups: Group[]
     setGroups: Dispatch<React.SetStateAction<Group[]>>
- }
+}
 
 export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
 
-    
+
     const init = {
         name: "",
         format: "",
@@ -25,14 +25,14 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
     const [projectInfo, setProjectInfo] = useState(init);
     const [error, setError] = useState<string>('');
 
-    
+
     function handleInput(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         setProjectInfo({ ...projectInfo, [e.target.id]: e.target.value });
         console.log(projectInfo);
     }
 
     function onCreateProject(e: FormEvent<HTMLFormElement>) {
-        
+
         e.preventDefault();
         const collab_arr = stringToArray(projectInfo.collab)
         const reader_arr = stringToArray(projectInfo.reader)
@@ -64,8 +64,8 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
             })
             .catch((res) => {
                 console.log(res);
-        });
-    } 
+            });
+    }
 
     useEffect(() => {
         const to_send = { email };
@@ -82,6 +82,10 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
             .then((data) => {
                 if (data.success) {
                     setGroups(data.groups);
+                    console.log("received:")
+                    console.log(data.groups);
+                    console.log("after being set:");
+                    console.log(groups);
                 } else {
                     console.error("Error from server:", data.message);
                     setError(data.message);
@@ -90,8 +94,8 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
             .catch((err) => {
                 console.error("Network error:", err);
             });
-            return () => {};
-    }, [groups, email]);
+        return () => { };
+    }, []);
 
     return (
         <div className="login-form">
@@ -113,11 +117,14 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
                     Reader(s) (E-mail separated with ',')
                     <input type="text" id="reader" onChange={handleInput} />
                 </label>
-                <select name="groups" id="groups" multiple onChange={handleInput}>
-                    {groups.map(g => {
-                        (<option value={g.id}>{g.name}</option>)
-                    })}
-                </select>
+                // TODO: make part of request
+                <label>Add collaborator groups
+                    <select name="groups" id="groups" onChange={handleInput} multiple>
+                        {groups.map(g => (
+                            <option key={g.group_id} value={g.group_id}>{g.group_name}</option>
+                        ))}
+                    </select>
+                </label>
                 <button type="submit">Create Project</button>
                 <p>{error}</p>
             </form>

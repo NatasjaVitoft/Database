@@ -20,9 +20,10 @@ export interface Project {
 }
 
 export interface Group {
-  id: number;
-  name: string;
-  role: string;
+  group_name: string;
+  owner_email: string;
+  group_role: string;
+  group_id: number;
 }
 
 export interface IProjectsProps {
