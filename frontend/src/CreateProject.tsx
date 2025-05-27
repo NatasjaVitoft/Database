@@ -19,11 +19,12 @@ export function CreateProject({ groups }) {
         format: "",
         collab: "",
         reader: "",
+        groups: "",
     };
 
     const [projectInfo, setProjectInfo] = useState(init);
 
-    function handleInput(e: ChangeEvent<HTMLInputElement>) {
+    function handleInput(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
         setProjectInfo({ ...projectInfo, [e.target.id]: e.target.value });
         console.log(projectInfo);
     }
@@ -39,7 +40,7 @@ export function CreateProject({ groups }) {
             format: projectInfo.format,
             collaborators: collab_arr,
             readers: reader_arr,
-            owner: email, 
+            owner: email,
         };
 
         const opts = {
@@ -84,6 +85,11 @@ export function CreateProject({ groups }) {
                     Reader(s) (E-mail separated with ',')
                     <input type="text" id="reader" onChange={handleInput} />
                 </label>
+                <select name="groups" id="groups" multiple onChange={handleInput}>
+                    {groups.map(g => {
+                        (<option value={g.id}>{g.name}</option>)
+                    })}
+                </select>
                 <button type="submit">Create Project</button>
             </form>
         </div>
