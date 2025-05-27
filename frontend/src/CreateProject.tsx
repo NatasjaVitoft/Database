@@ -10,7 +10,7 @@ export interface ICreateProjectProps {
     setGroups: Dispatch<React.SetStateAction<Group[]>>
  }
 
-export function CreateProject({ groups, setGroups }) {
+export function CreateProject({ groups }) {
 
     const { email } = useContext(AuthContext);
 

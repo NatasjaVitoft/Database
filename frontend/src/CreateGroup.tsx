@@ -3,12 +3,13 @@ import AuthContext from './AuthContext';
 import { stringToArray } from './api-util';
 
 export interface ICreateGroupProps {
-    
+
 }
 
 export default function CreateGroup(props: ICreateGroupProps) {
 
     const { email } = useContext(AuthContext);
+    const [msg, setMsg] = useState<string>('');
     const init = {
         name: "",
         members: "",
@@ -49,12 +50,15 @@ export default function CreateGroup(props: ICreateGroupProps) {
             .then((res) => {
                 if (res.ok) {
                     console.log(res);
+                    setMsg(res.statusText);
                 } else {
                     console.log(res);
+                    setMsg(res.statusText);
                 }
             })
             .catch((res) => {
                 console.log(res);
+                setMsg(res.statusText);
         });
     }
 
@@ -79,6 +83,7 @@ export default function CreateGroup(props: ICreateGroupProps) {
                     </select>
                 </label>
                 <button type='submit'>Create Group</button>
+                <p>{msg}</p>
             </form>
         </div>
     );

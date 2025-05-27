@@ -70,7 +70,7 @@ export function ProjectList({ setDocument, email, ownedProjects, setOwnedProject
             .catch((err) => {
                 console.error("Network error:", err);
             });
-    }, [email]);
+    }, [email, ownedProjects, setOwnedProjects, sharedProjects, setSharedProjects]);
 
 
     function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
