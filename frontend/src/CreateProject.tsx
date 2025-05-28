@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent, type Dispatch, type FormEvent } from "react";
+import { useState, type ChangeEvent, type FormEvent } from "react";
 
 import { useContext } from "react";
 import AuthContext from "./AuthContext";
@@ -7,10 +7,10 @@ import type { Group } from "./Projects";
 
 export interface ICreateProjectProps {
     groups: Group[]
-    setGroups: Dispatch<React.SetStateAction<Group[]>>
+    onProjectCreated: () => void;
 }
 
-export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
+export function CreateProject({ groups, onProjectCreated }: ICreateProjectProps) {
 
 
     const init = {
@@ -18,16 +18,28 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
         format: "",
         collab: "",
         reader: "",
-        groups: "",
+        groups: [],
     };
 
     const { email } = useContext(AuthContext);
     const [projectInfo, setProjectInfo] = useState(init);
-    const [error, setError] = useState<string>('');
+    const [msg, setMsg] = useState<string>('');
 
 
-    function handleInput(e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) {
+    function handleInput(e: ChangeEvent<HTMLInputElement>) {
         setProjectInfo({ ...projectInfo, [e.target.id]: e.target.value });
+        console.log(projectInfo);
+    }
+
+    function handleSelectInput(e: ChangeEvent<HTMLSelectElement>) {
+        const collection = e.target.selectedOptions;
+        const groups = [] as number[];
+
+        for (let i = 0; i < collection.length; i++) {
+            groups[i] = parseInt(collection[i].value);
+        }
+
+        setProjectInfo({ ...projectInfo, [e.target.id]: groups });
         console.log(projectInfo);
     }
 
@@ -43,6 +55,7 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
             collaborators: collab_arr,
             readers: reader_arr,
             owner: email,
+            groups: projectInfo.groups
         };
 
         const opts = {
@@ -58,6 +71,8 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
             .then((res) => {
                 if (res.ok) {
                     console.log(res);
+                    onProjectCreated();
+                    setMsg(res.statusText);
                 } else {
                     console.log(res);
                 }
@@ -66,36 +81,6 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
                 console.log(res);
             });
     }
-
-    useEffect(() => {
-        const to_send = { email };
-
-        fetch("http://localhost:3000/get_groups_by_owner", {
-            method: "POST",
-            headers: {
-                "Content-type": "application/json",
-                Accept: "application/json",
-            },
-            body: JSON.stringify(to_send),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) {
-                    setGroups(data.groups);
-                    console.log("received:")
-                    console.log(data.groups);
-                    console.log("after being set:");
-                    console.log(groups);
-                } else {
-                    console.error("Error from server:", data.message);
-                    setError(data.message);
-                }
-            })
-            .catch((err) => {
-                console.error("Network error:", err);
-            });
-        return () => { };
-    }, []);
 
     return (
         <div className="login-form">
@@ -117,16 +102,15 @@ export function CreateProject({ groups, setGroups }: ICreateProjectProps) {
                     Reader(s) (E-mail separated with ',')
                     <input type="text" id="reader" onChange={handleInput} />
                 </label>
-                // TODO: make part of request
                 <label>Add collaborator groups
-                    <select name="groups" id="groups" onChange={handleInput} multiple>
+                    <select name="groups" id="groups" onChange={handleSelectInput} multiple>
                         {groups.map(g => (
                             <option key={g.group_id} value={g.group_id}>{g.group_name}</option>
                         ))}
                     </select>
                 </label>
                 <button type="submit">Create Project</button>
-                <p>{error}</p>
+                <p>{msg}</p>
             </form>
         </div>
     );

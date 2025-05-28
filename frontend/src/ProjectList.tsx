@@ -1,6 +1,5 @@
 import type { Dispatch } from 'react';
 import type { DocumentData, Project } from './Projects';
-import { useEffect, useState } from "react";
 import { useWebSocket } from './WSContext';
 
 
@@ -13,64 +12,8 @@ export interface IProjectListProps {
     setSharedProjects: Dispatch<React.SetStateAction<Project[]>>;
 }
 
-export function ProjectList({ setDocument, email, ownedProjects, setOwnedProjects, sharedProjects, setSharedProjects }: IProjectListProps) {
+export function ProjectList({ setDocument, email, ownedProjects, sharedProjects, }: IProjectListProps) {
     const { connect } = useWebSocket();
-
-    const [error, setError] = useState<string | null>(null);
-    
-
-    // Useeffect for owned projects
-
-    useEffect(() => {
-        const to_send = { email };
-
-        fetch("http://localhost:3000/get_all_documents_owner", {
-            method: "POST",
-            headers: {
-                "Content-type": "application/json",
-                Accept: "application/json",
-            },
-            body: JSON.stringify(to_send),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) {
-                    setOwnedProjects(data.documents);
-                } else {
-                    console.error("Error from server:", data.message);
-                    setError(data.message);
-                }
-            })
-            .catch((err) => {
-                console.error("Network error:", err);
-            });
-    }, []);
-
-    // Useeffect for shared projects
-
-    useEffect(() => {
-        const to_send = { email };
-
-        fetch("http://localhost:3000/get_all_documents_shared", {
-            method: "POST",
-            headers: {
-                "Content-type": "application/json",
-                Accept: "application/json",
-            },
-            body: JSON.stringify(to_send),
-        })
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.success) {
-                    setSharedProjects(data.documents);
-                } else {
-                    console.error("Error from server:", data.message);
-                }
-            })
-            .catch((err) => {
-                console.error("Network error:", err);
-            });
-    }, []);
 
 
     function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
@@ -94,7 +37,6 @@ export function ProjectList({ setDocument, email, ownedProjects, setOwnedProject
         <div className='list-container'>
             <div className='col'>
                 <h3>Your projects</h3>
-                <p className='error'>{error}</p>
                 <table>
                     <thead>
                         <tr>

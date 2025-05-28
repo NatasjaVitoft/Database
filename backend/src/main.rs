@@ -202,6 +202,23 @@ async fn save_document_and_relations(
         })?;
     }
 
+    // Insert document related user groups
+    for group_id in payload.groups.iter() {
+        sqlx::query!(
+            "INSERT INTO document_relation_group (group_id, document_id) VALUES ($1, $2)",
+            group_id,
+            document_id.to_string(),
+        )
+        .execute(&state.pg_pool)
+        .await
+        .map_err(|e| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                json!({ "success": false, "message": e.to_string() }).to_string(),
+            )
+        })?;
+    }
+
     Ok((StatusCode::OK, "Success".to_string()))
 
 }
@@ -283,10 +300,31 @@ async fn get_all_documents_shared(
         )
     })?;
 
-    let document_ids: Vec<String> = relation_rows
+    // get document id's from share groups as well
+    let group_rows = sqlx::query!(
+        "SELECT document_id FROM group_members NATURAL JOIN document_relation_group WHERE member_email = $1",
+        payload.email
+    )
+    .fetch_all(&state.pg_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({ "success": false, "message": e.to_string() }).to_string(),
+        )
+    })?;
+
+    let relation_ids: Vec<String> = relation_rows
+        .iter()
+        .map(|row| row.document_id.clone())
+        .collect();    
+    let group_document_ids: Vec<String> = group_rows
         .iter()
         .map(|row| row.document_id.clone())
         .collect();
+
+    let document_ids = [relation_ids, group_document_ids].concat();
+
 
     if document_ids.is_empty() {
         return Ok((
@@ -531,7 +569,8 @@ struct DocumentCreateRequest {
     format: String,
     collaborators: Vec<String>, 
     readers: Vec<String>,       
-    owner: String,             
+    owner: String,    
+    groups: Vec<i32>,         
 }
 
 // STRUCT FOR GROUPS REQUEST

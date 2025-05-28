@@ -3,10 +3,10 @@ import AuthContext from './AuthContext';
 import { stringToArray } from './api-util';
 
 export interface ICreateGroupProps {
-
+    onCreateGroup: () => void;
 }
 
-export default function CreateGroup(props: ICreateGroupProps) {
+export default function CreateGroup({ onCreateGroup }: ICreateGroupProps) {
 
     const { email } = useContext(AuthContext);
     const [msg, setMsg] = useState<string>('');
@@ -49,6 +49,7 @@ export default function CreateGroup(props: ICreateGroupProps) {
         fetch("http://localhost:3000/create_group", opts)
             .then((res) => {
                 if (res.ok) {
+                    onCreateGroup();
                     console.log(res);
                     setMsg(res.statusText);
                 } else {

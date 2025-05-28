@@ -2,7 +2,11 @@
 import { useState } from "react";
 import type { FormEvent, ChangeEvent } from "react";
 
-export function Login({ setEmail, setIsLoggedIn }) {
+export interface ILoginProps {
+    setEmail: React.Dispatch<React.SetStateAction<string>>
+}
+
+export function Login({ setEmail }: ILoginProps)  {
     const init = {
         email: "",
         password: "",

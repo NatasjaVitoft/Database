@@ -6,7 +6,7 @@ import './App.css'
 import { WSProvider } from './WSContextProvider';
 
 function App() {
-  const { isLoggedIn, setIsLoggedIn, email, setEmail } = useContext(AuthContext);
+  const { email, setEmail } = useContext(AuthContext);
 
   return (
     <>
@@ -19,7 +19,7 @@ function App() {
         </div>
       ) :
         <div>
-          <Login setEmail={setEmail} setIsLoggedIn={setIsLoggedIn} />
+          <Login setEmail={setEmail} />
         </div>
       }
     </>
