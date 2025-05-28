@@ -14,7 +14,7 @@ function App() {
         <div>
           <h1>Welcome {email}!</h1>
           <WSProvider>
-            <Projects email={email} />
+            <Projects />
           </WSProvider>
         </div>
       ) :

@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
 import { CreateProject } from "./CreateProject";
 import { ProjectList } from "./ProjectList";
 import { DocumentEditor } from "./DocumentEditor";
 import CreateGroup from "./CreateGroup";
+import AuthContext from "./AuthContext";
 
 export interface DocumentData {
   doc_id: string;
@@ -26,11 +27,8 @@ export interface Group {
   group_id: number;
 }
 
-export interface IProjectsProps {
-  email: string;
-}
-
-export function Projects({ email }: IProjectsProps) {
+export function Projects() {
+  const { email } = useContext(AuthContext);
   const [document, setDocument] = useState<DocumentData | null>(null);
   const [ownedProjects, setOwnedProjects] = useState<Project[]>([]);
   const [sharedProjects, setSharedProjects] = useState<Project[]>([]);
