@@ -48,14 +48,14 @@ export default function CreateGroup({ onCreateGroup }: ICreateGroupProps) {
 
         fetch("http://localhost:3000/create_group", opts)
             .then((res) => {
-                if (res.ok) {
+                    console.log(res);
+                    return res.json();
+                })
+            .then(data => {
+                if (data.success) {
                     onCreateGroup();
-                    console.log(res);
-                    setMsg(res.statusText);
-                } else {
-                    console.log(res);
-                    setMsg(res.statusText);
                 }
+                setMsg(data.message);
             })
             .catch((res) => {
                 console.log(res);

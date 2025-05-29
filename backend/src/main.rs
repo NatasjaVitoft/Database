@@ -305,7 +305,7 @@ async fn save_document_and_relations(
         })?;
     }
 
-    Ok((StatusCode::OK, "Success".to_string()))
+    Ok((StatusCode::OK, json!({ "success": true, "message": "Created" }).to_string()))
 }
 
 // This function handles the request for getting all documents belonging to the owner
@@ -475,6 +475,23 @@ pub async fn create_groups(
     Json(payload): Json<Vec<GroupsRequest>>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     for group in payload {
+
+        // Check for malformed requests
+        if group.name.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                json!({ "success": false, "message": "Group name must not be empty" }).to_string(),
+            ));
+        }    
+
+        if group.members.is_empty() {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                json!({ "success": false, "message": "Members must not be empty" }).to_string(),
+            ));
+        }    
+
+
         // Start transaction
         let mut tx: Transaction<'_, Postgres> = state.pg_pool.begin().await.map_err(|e| {
             (
@@ -534,7 +551,7 @@ pub async fn create_groups(
 
     Ok((
         StatusCode::CREATED,
-        json!({ "success": true, "message": "Groups created successfully" }).to_string(),
+        json!({ "success": true, "message": "Group created successfully" }).to_string(),
     ))
 }
 

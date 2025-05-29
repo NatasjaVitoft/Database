@@ -68,15 +68,12 @@ export function CreateProject({ groups, onProjectCreated }: ICreateProjectProps)
         };
 
         fetch("http://localhost:3000/save_document_and_relations", opts)
-            .then((res) => {
-                if (res.ok) {
-                    console.log(res);
-                    onProjectCreated();
-                    setMsg(res.statusText);
-                } else {
-                    console.log(res);
-                    setMsg(res.statusText);
-                }
+            .then((res) => res.json())
+            .then(data => {
+                if (data.success) {
+                onProjectCreated();
+            }
+            setMsg(data.message);
             })
             .catch((res) => {
                 console.log(res);
