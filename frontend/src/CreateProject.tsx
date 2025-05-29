@@ -75,10 +75,12 @@ export function CreateProject({ groups, onProjectCreated }: ICreateProjectProps)
                     setMsg(res.statusText);
                 } else {
                     console.log(res);
+                    setMsg(res.statusText);
                 }
             })
             .catch((res) => {
                 console.log(res);
+                setMsg(res.statusText);
             });
     }
 

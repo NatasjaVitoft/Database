@@ -98,7 +98,7 @@ async fn main() {
         .layer(cors)
         .with_state(state);
 
-    // start automatic mongo flush timer
+    // Periodic persistence and redis housekeeping
     start_periodic_flush(flush_timer_state).await;
 
     // Serving the application using the listener
@@ -203,6 +203,21 @@ async fn save_document_and_relations(
     State(state): State<AppState>,
     Json(payload): Json<DocumentCreateRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
+
+    if payload.title.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json!({ "success": false, "message": "Title must not be empty" }).to_string(),
+        ));
+    }    
+    if payload.format.is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            json!({ "success": false, "message": "Format must not be empty" }).to_string(),
+        ));
+    }
+
+
     let collection = state.mongo_db.collection::<Document>("documents");
 
     let document = Document {
