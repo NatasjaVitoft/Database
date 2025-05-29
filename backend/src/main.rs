@@ -135,8 +135,8 @@ async fn flush_mongo_all(
     for key in doc_keys {
         let content: String = conn.get(&key).await?; // ERROR
 
-        let key_str = key.replace("doc:", "");
-        let obj_id = ObjectId::parse_str(key_str)?; // ERROR
+        let id_str = key.replace("doc:", "");
+        let obj_id = ObjectId::parse_str(&id_str)?; // ERROR
         let filter = doc! { "_id": obj_id };
         let cont = doc! { "$set": {"content": content}};
 
@@ -145,6 +145,20 @@ async fn flush_mongo_all(
             .collection::<Document>("documents")
             .find_one_and_update(filter, cont, None)
             .await?;
+
+        let map = state.ws_connections.lock().await;
+
+        match map.get(&id_str) {
+            Some(count) => {
+                if *count <= 0 {
+                    let _: () = conn.del(key).await?;
+                }
+            }
+            None => {
+                eprintln!("Failed to find doc id in ws_connections: {}\nCleaning up", id_str);
+                let _: () = conn.del(key).await?;
+            }
+        }
     }
     Ok(())
 }

@@ -8,7 +8,6 @@ use axum::{extract::State, http::StatusCode};
 use futures_util::{SinkExt, StreamExt};
 use mongodb::bson::doc;
 use serde::Deserialize;
-use tokio::time;
 
 // Redis
 use redis::AsyncCommands;
@@ -49,7 +48,6 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
         .await
         .expect("Failed to connect to Redis");
 
-    let mut conn_flush = conn.clone();
     let mut conn_close = conn.clone();
 
     let doc_exists: bool = conn.exists(&doc_key).await.unwrap_or(false);
