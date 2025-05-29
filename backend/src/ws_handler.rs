@@ -44,11 +44,7 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
     let doc_key = format!("doc:{}", params.document_id);
     let channel = format!("channel:{}", params.document_id);
 
-    let redis_conn_str =
-        std::env::var("REDIS_CONNECTION_STRING").unwrap_or(String::from("redis://localhost:6379"));
-
-    let redis_client = redis::Client::open(redis_conn_str).expect("Failed to create Redis client");
-    let mut conn = redis_client
+    let mut conn = state.redis_client
         .get_tokio_connection_manager()
         .await
         .expect("Failed to connect to Redis");
@@ -97,7 +93,7 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
     }
 
     // Set up Pub/Sub subscription
-    let mut pubsub_conn = redis_client
+    let mut pubsub_conn = state.redis_client
         .get_async_connection()
         .await
         .unwrap()
@@ -121,7 +117,6 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
         }
     });
 
-    let doc_key_flush = doc_key.clone();
     let doc_key_close = doc_key.clone();
 
     // listen to messages from the client and forward them to Redis
@@ -148,38 +143,6 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
     let doc_id = &params.document_id.clone();
     let state_close = &state.clone();
 
-    let mut flush_timer: Option<tokio::task::JoinHandle<()>> = None;
-
-    // Scope for releasing map before awaiting receiver
-    { 
-        let map = state_close.ws_connections.lock().await;
-
-        // BUG: Only client that started it can close it again
-        if let Some(count) = map.get(&params.document_id) {
-            if *count == 1 {
-                flush_timer = Some(tokio::spawn(async move {
-                    println!("Started flush timer");
-                    loop {
-                        time::sleep(time::Duration::from_secs(10)).await;
-                        let _ = flush_mongo(
-                            &state,
-                            &params.document_id,
-                            &doc_key_flush,
-                            &mut conn_flush,
-                        )
-                        .await
-                        .map_err(|e| {
-                            eprintln!(
-                                "Error on timed flush doc with id: {} Error: {}",
-                                &params.document_id, e
-                            );
-                        });
-                    }
-                }));
-            }
-        }
-    }
-
     // Await socket receiver. Flush when client breaks connection and abort listener/sender processes
     let _ = ws_to_redis.await;
 
@@ -195,13 +158,6 @@ async fn handle_socket(mut socket: WebSocket, params: WsParams, state: AppState)
             println!("count after decrement: {}", count);
             if *count <= 0 {
                 println!("No more clients connected to: {}", &doc_key_close);
-                if let Some(flush_timer) = flush_timer {
-                    flush_timer.abort();
-                    println!("Aborted flush timer")
-                }
-                else {
-                    println!("No flush timer found?")
-                }
 
                 if let Ok(_) = flush_mongo(&state_close, &doc_id, &doc_key_close, &mut conn_close)
                     .await

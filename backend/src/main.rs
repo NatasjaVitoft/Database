@@ -1,17 +1,23 @@
 use std::collections::HashMap;
+use std::error::Error;
 use std::sync::Arc;
 use std::time::Duration;
 
 use axum::routing::get;
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 
+use mongodb::bson::doc;
+use redis::AsyncCommands;
+use redis::Client;
+use redis::aio::ConnectionManager;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{Postgres, Row, Transaction};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
+use tokio::time;
 use tower_http::cors::{Any, CorsLayer};
-use sqlx::{Postgres, Row, Transaction};
 
 // MongoDB
 use mongodb::bson::oid::ObjectId;
@@ -55,9 +61,15 @@ async fn main() {
     let mongo_db_name =
         std::env::var("MONGO_DB_NAME").expect("MONGO_DB_NAME not found in env file");
 
+    // Redis client
+    let redis_conn_str =
+        std::env::var("REDIS_CONNECTION_STRING").unwrap_or(String::from("redis://localhost:6379"));
+    let redis_client = redis::Client::open(redis_conn_str).expect("Failed to create Redis client");
+
     let state = AppState {
         pg_pool: db_pool,
         mongo_db: mongo_client.database(&mongo_db_name),
+        redis_client,
         ws_connections: Arc::new(Mutex::new(HashMap::new())),
     };
 
@@ -68,18 +80,26 @@ async fn main() {
     // Print the address the server is listening on
     println!("listening on {}", listener.local_addr().unwrap());
 
+    let flush_timer_state = state.clone();
+
     // Creating the Axum router and add the needed routes
     let app = Router::new()
         .route("/login", post(login_user))
         .route("/save_document", post(save_document))
         .route("/ws", get(ws_handler::ws_handler))
-        .route("/save_document_and_relations", post(save_document_and_relations))
+        .route(
+            "/save_document_and_relations",
+            post(save_document_and_relations),
+        )
         .route("/get_all_documents_owner", post(get_all_documents_owner))
         .route("/get_all_documents_shared", post(get_all_documents_shared))
         .route("/create_group", post(create_groups))
         .route("/get_groups_by_owner", post(get_groups_by_owner))
         .layer(cors)
         .with_state(state);
+
+    // start automatic mongo flush timer
+    start_periodic_flush(flush_timer_state).await;
 
     // Serving the application using the listener
     axum::serve(listener, app)
@@ -88,6 +108,46 @@ async fn main() {
 }
 
 // ***************************************************************************************************************************************
+
+pub async fn start_periodic_flush(state: AppState) {
+    if let Ok(mut conn) = state.redis_client.get_tokio_connection_manager().await {
+        tokio::spawn(async move {
+            loop {
+                time::sleep(time::Duration::from_secs(10)).await;
+
+                match flush_mongo_all(&state, &mut conn).await {
+                    Ok(_) => println!("Periodic flush successful"),
+                    Err(e) => eprintln!("Periodic flush failed: {}", e),
+                }
+            }
+        });
+    }
+}
+
+// TODO: TEST
+async fn flush_mongo_all(
+    state: &AppState,
+    conn: &mut ConnectionManager,
+) -> Result<(), Box<dyn Error>> {
+    let doc_keys: Vec<String> = conn.keys(String::from('*')).await?;
+    println!("Flush timer: Keys read: {:?}", doc_keys);
+
+    for key in doc_keys {
+        let content: String = conn.get(&key).await?; // ERROR
+
+        let key_str = key.replace("doc:", "");
+        let obj_id = ObjectId::parse_str(key_str)?; // ERROR
+        let filter = doc! { "_id": obj_id };
+        let cont = doc! { "$set": {"content": content}};
+
+        state
+            .mongo_db
+            .collection::<Document>("documents")
+            .find_one_and_update(filter, cont, None)
+            .await?;
+    }
+    Ok(())
+}
 
 // This function handles the Login endpoint/request
 
@@ -126,16 +186,15 @@ async fn login_user(
 // This function handles the saving of a document and its relations in both MongoDB and PostgreSQL
 
 async fn save_document_and_relations(
-
     State(state): State<AppState>,
     Json(payload): Json<DocumentCreateRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let collection = state.mongo_db.collection::<Document>("documents");
 
     let document = Document {
-        id: None, 
+        id: None,
         title: payload.title,
-        content: String::new(), 
+        content: String::new(),
         format: payload.format,
     };
 
@@ -147,8 +206,8 @@ async fn save_document_and_relations(
     })?;
 
     let document_id = insert_result.inserted_id.as_object_id().ok_or((
-    StatusCode::INTERNAL_SERVER_ERROR,
-    json!({"success": false, "message": "Failed to extract ObjectId"}).to_string(),
+        StatusCode::INTERNAL_SERVER_ERROR,
+        json!({"success": false, "message": "Failed to extract ObjectId"}).to_string(),
     ))?;
 
     sqlx::query!(
@@ -167,7 +226,6 @@ async fn save_document_and_relations(
     })?;
 
     for collaborator in payload.collaborators.iter() {
-
         sqlx::query!(
             "INSERT INTO document_relation (user_email, document_id, user_role) VALUES ($1, $2, $3)",
             collaborator,
@@ -185,7 +243,6 @@ async fn save_document_and_relations(
     }
 
     for reader in payload.readers.iter() {
-
         sqlx::query!(
             "INSERT INTO document_relation (user_email, document_id, user_role) VALUES ($1, $2, $3)",
             reader,
@@ -220,9 +277,7 @@ async fn save_document_and_relations(
     }
 
     Ok((StatusCode::OK, "Success".to_string()))
-
 }
-
 
 // This function handles the request for getting all documents belonging to the owner
 
@@ -254,24 +309,24 @@ async fn get_all_documents_owner(
     let mut documents = Vec::new();
 
     for (document_id, owner_email) in document_ids {
-    let obj_id_result = mongodb::bson::oid::ObjectId::parse_str(&document_id);
-    if obj_id_result.is_err() {
-        continue;
-    }
-    let obj_id = obj_id_result.unwrap();
+        let obj_id_result = mongodb::bson::oid::ObjectId::parse_str(&document_id);
+        if obj_id_result.is_err() {
+            continue;
+        }
+        let obj_id = obj_id_result.unwrap();
 
-    let filter = mongodb::bson::Document::from_iter(vec![(String::from("_id"), obj_id.into())]);
-    let document_result = collection.find_one(filter, None).await;
+        let filter = mongodb::bson::Document::from_iter(vec![(String::from("_id"), obj_id.into())]);
+        let document_result = collection.find_one(filter, None).await;
 
-    if let Ok(Some(doc)) = document_result {
-        documents.push(serde_json::json!({
-            "id": document_id,
-            "title": doc.title,
-            "format": doc.format,
-            "owner_email": owner_email,
-        }));
+        if let Ok(Some(doc)) = document_result {
+            documents.push(serde_json::json!({
+                "id": document_id,
+                "title": doc.title,
+                "format": doc.format,
+                "owner_email": owner_email,
+            }));
+        }
     }
-}
     Ok((
         StatusCode::OK,
         serde_json::json!({ "success": true, "documents": documents }).to_string(),
@@ -284,7 +339,6 @@ async fn get_all_documents_shared(
     State(state): State<AppState>,
     Json(payload): Json<GetDocumentRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-
     let relation_rows = sqlx::query!(
         "SELECT document_id FROM document_relation WHERE user_email = $1 AND user_role IN ($2, $3)",
         payload.email,
@@ -317,14 +371,13 @@ async fn get_all_documents_shared(
     let relation_ids: Vec<String> = relation_rows
         .iter()
         .map(|row| row.document_id.clone())
-        .collect();    
+        .collect();
     let group_document_ids: Vec<String> = group_rows
         .iter()
         .map(|row| row.document_id.clone())
         .collect();
 
     let document_ids = [relation_ids, group_document_ids].concat();
-
 
     if document_ids.is_empty() {
         return Ok((
@@ -337,7 +390,6 @@ async fn get_all_documents_shared(
     let collection = state.mongo_db.collection::<Document>("documents");
 
     for doc_id in document_ids {
-
         let owner_row = sqlx::query!(
             "SELECT user_email FROM document_relation WHERE document_id = $1 AND user_role = $2",
             doc_id,
@@ -354,7 +406,7 @@ async fn get_all_documents_shared(
 
         let owner_email = match owner_row {
             Some(row) => row.user_email,
-            None => continue, 
+            None => continue,
         };
 
         let obj_id = match mongodb::bson::oid::ObjectId::parse_str(&doc_id) {
@@ -387,14 +439,12 @@ async fn get_all_documents_shared(
     ))
 }
 
-
 // ADD GROUPS INTO POSTGRES TABLE
 
 pub async fn create_groups(
     State(state): State<AppState>,
-    Json(payload): Json<Vec<GroupsRequest>>, 
+    Json(payload): Json<Vec<GroupsRequest>>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-    
     for group in payload {
         // Start transaction
         let mut tx: Transaction<'_, Postgres> = state.pg_pool.begin().await.map_err(|e| {
@@ -423,7 +473,8 @@ pub async fn create_groups(
         let group_id: i32 = query_groups.try_get("group_id").map_err(|e| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                json!({ "success": false, "message": format!("Failed to get group_id: {}", e) }).to_string(),
+                json!({ "success": false, "message": format!("Failed to get group_id: {}", e) })
+                    .to_string(),
             )
         })?;
 
@@ -454,10 +505,9 @@ pub async fn create_groups(
 
     Ok((
         StatusCode::CREATED,
-        json!({ "success": true, "message": "Groups created successfully" }).to_string()
+        json!({ "success": true, "message": "Groups created successfully" }).to_string(),
     ))
 }
-
 
 async fn get_groups_by_owner(
     State(state): State<AppState>,
@@ -478,12 +528,14 @@ async fn get_groups_by_owner(
 
     let groups: Vec<_> = rows
         .into_iter()
-        .map(|row| json!({
-            "group_name": row.group_name,
-            "owner_email": row.owner_email,
-            "group_role": row.group_role,
-            "group_id": row.group_id,
-        }))
+        .map(|row| {
+            json!({
+                "group_name": row.group_name,
+                "owner_email": row.owner_email,
+                "group_role": row.group_role,
+                "group_id": row.group_id,
+            })
+        })
         .collect();
 
     Ok((
@@ -496,13 +548,12 @@ async fn get_groups_by_owner(
 // This function handles the MongoDB document creation
 
 async fn save_document(
-
     State(state): State<AppState>,
     Json(mut payload): Json<Document>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     let collection = state.mongo_db.collection::<Document>("documents");
 
-    payload.id = None; 
+    payload.id = None;
 
     match collection.insert_one(payload, None).await {
         Ok(insert_result) => Ok((
@@ -515,8 +566,6 @@ async fn save_document(
         )),
     }
 }
-
-
 
 // ***************************************************************************************************************************************
 
@@ -551,6 +600,7 @@ struct UserRow {
 pub struct AppState {
     pg_pool: PgPool,
     mongo_db: MongoDatabase,
+    redis_client: Client,
     ws_connections: Arc<Mutex<HashMap<String, usize>>>,
 }
 
@@ -567,10 +617,10 @@ struct Document {
 struct DocumentCreateRequest {
     title: String,
     format: String,
-    collaborators: Vec<String>, 
-    readers: Vec<String>,       
-    owner: String,    
-    groups: Vec<i32>,         
+    collaborators: Vec<String>,
+    readers: Vec<String>,
+    owner: String,
+    groups: Vec<i32>,
 }
 
 // STRUCT FOR GROUPS REQUEST
@@ -584,5 +634,5 @@ pub struct GroupsRequest {
 
 #[derive(Deserialize, Serialize, Debug)]
 pub struct GetGroupsRequest {
-     pub email: String,
+    pub email: String,
 }
