@@ -95,6 +95,7 @@ async fn main() {
         .route("/get_all_documents_shared", post(get_all_documents_shared))
         .route("/create_group", post(create_groups))
         .route("/get_groups_by_owner", post(get_groups_by_owner))
+        .route("/get_user_role", post(get_user_role))
         .layer(cors)
         .with_state(state);
 
@@ -276,7 +277,7 @@ async fn save_document_and_relations(
             "INSERT INTO document_relation (user_email, document_id, user_role) VALUES ($1, $2, $3)",
             reader,
             document_id.to_string(),
-            "read" as &str // user_role = "reader"
+            "reader" as &str // user_role = "reader"
         )
         .execute(&state.pg_pool)
         .await
@@ -372,7 +373,7 @@ async fn get_all_documents_shared(
         "SELECT document_id FROM document_relation WHERE user_email = $1 AND user_role IN ($2, $3)",
         payload.email,
         "editor",
-        "read"
+        "reader"
     )
     .fetch_all(&state.pg_pool)
     .await
@@ -591,6 +592,42 @@ async fn get_groups_by_owner(
 }
 
 // ***************************************************************************************************************************************
+// Fetch userrole in postgres based on email and document id, table document_relation
+
+async fn get_user_role(
+    State(state): State<AppState>,
+    Json(payload): Json<GetUserRole>,
+) -> Result<(StatusCode, String), (StatusCode, String)> {
+    let rows = sqlx::query!(
+        "SELECT user_role FROM document_relation WHERE user_email = $1 AND document_id = $2",
+        payload.email,
+        payload.document_id
+    )
+    .fetch_all(&state.pg_pool)
+    .await
+    .map_err(|e| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            json!({ "success": false, "message": e.to_string() }).to_string(),
+        )
+    })?;
+
+    if rows.is_empty() {
+        return Ok((
+            StatusCode::NOT_FOUND,
+            json!({ "success": false, "message": "No role found for this user and document" }).to_string(),
+        ));
+    }
+
+    let user_role: Vec<String> = rows.iter().map(|row| row.user_role.clone()).collect();
+
+    Ok((
+        StatusCode::OK,
+        json!({ "success": true, "user_role": user_role }).to_string(),
+    ))
+}
+
+// ***************************************************************************************************************************************
 // This function handles the MongoDB document creation
 
 async fn save_document(
@@ -681,4 +718,10 @@ pub struct GroupsRequest {
 #[derive(Deserialize, Serialize, Debug)]
 pub struct GetGroupsRequest {
     pub email: String,
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct GetUserRole {
+    pub email: String,
+    pub document_id: String,
 }

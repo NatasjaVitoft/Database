@@ -26,7 +26,7 @@ export function DocumentEditor({ document, setDocument}: IDocumentEditorProps) {
             <h2>Editing:</h2>
             <h3>{document.name}</h3>
             <div className="document-container">
-                <textarea name="document-text" id="document-text" value={document.content}  onChange={handleChange}></textarea>
+                <textarea name="document-text" id="document-text" value={document.content}  onChange={handleChange} readOnly={document.userRole === "reader"}></textarea>
             </div>
             <button onClick={onExit}>Go Back</button>
         </>

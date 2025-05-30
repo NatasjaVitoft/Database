@@ -11,6 +11,7 @@ export interface DocumentData {
   content: string;
   format: string;
   owner_email: string;
+  userRole?: string;
 }
 
 export interface Project {
