@@ -209,8 +209,15 @@ async fn user_has_access(email: &String, doc_id: &String, state: &AppState) -> O
         SELECT user_role
         FROM document_relation
         WHERE user_email = $1
-          AND document_id = $2
-          AND user_role IN ('owner', 'editor', 'reader')
+        AND document_id = $2
+        UNION
+        SELECT group_role FROM groups AS user_role
+        NATURAL JOIN document_relation_group
+        NATURAL JOIN group_members
+        WHERE document_id = $2
+        AND member_email = $1
+        ORDER BY user_role
+        LIMIT 1;
         "#,
         email,
         doc_id,
@@ -219,7 +226,7 @@ async fn user_has_access(email: &String, doc_id: &String, state: &AppState) -> O
     .await
     .ok()??;
 
-    Some(user.user_role)
+    Some(user.user_role.unwrap())
 }
 
 #[derive(Debug, Deserialize)]

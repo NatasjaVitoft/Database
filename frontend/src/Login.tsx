@@ -21,9 +21,6 @@ export function Login({ setEmail }: ILoginProps)  {
 
     function performLogin(e: FormEvent<HTMLFormElement>) {
         e.preventDefault()
-        //  TODO: Perform login on server.
-        //  If succesful, add email to authcontext
-        // if not display error
 
         const opts = {
             method: 'POST',
