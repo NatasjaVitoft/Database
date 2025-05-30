@@ -12,6 +12,7 @@ export interface IProjectListProps {
     setSharedProjects: Dispatch<React.SetStateAction<Project[]>>;
 }
 
+
 async function fetchUserRole(doc_id: string, email: string): Promise<string> {
   const res = await fetch("http://localhost:3000/get_user_role", {
     method: "POST",
@@ -30,7 +31,7 @@ export function ProjectList({ setDocument, email, ownedProjects, sharedProjects,
     const { connect } = useWebSocket();
 
     async function handleProjectClick(doc_id: string, name: string, format: string, owner_email: string) {
-
+        
         const userRole = await fetchUserRole(doc_id, email);
 
         if (userRole === "reader") {
