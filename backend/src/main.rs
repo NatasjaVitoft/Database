@@ -7,16 +7,23 @@ use axum::routing::get;
 use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 
 use mongodb::bson::doc;
+
 use redis::AsyncCommands;
-use redis::Client;
 use redis::aio::ConnectionManager;
-use serde::{Deserialize, Serialize};
+
 use serde_json::json;
-use sqlx::{PgPool, postgres::PgPoolOptions};
+
+use sqlx::postgres::PgPoolOptions;
 use sqlx::{Postgres, Row, Transaction};
+
+use structs::{
+    AppState, Document, DocumentCreateRequest, GetDocumentRequest, GetUserRole, GroupsRequest,
+    LoginRequest, UserRow,
+};
 use tokio::net::TcpListener;
 use tokio::sync::Mutex;
 use tokio::time;
+
 use tower_http::cors::{Any, CorsLayer};
 
 // MongoDB
@@ -26,6 +33,7 @@ use mongodb::{Client as MongoClient, Database as MongoDatabase};
 // For counting connections across threads
 pub type WSConnections = Arc<Mutex<HashMap<String, usize>>>;
 
+mod structs;
 mod ws_handler;
 
 #[tokio::main]
@@ -125,7 +133,6 @@ pub async fn start_periodic_flush(state: AppState) {
     }
 }
 
-// TODO: TEST
 async fn flush_mongo_all(
     state: &AppState,
     conn: &mut ConnectionManager,
@@ -156,7 +163,10 @@ async fn flush_mongo_all(
                 }
             }
             None => {
-                eprintln!("Failed to find doc id in ws_connections: {}\nCleaning up", id_str);
+                eprintln!(
+                    "Failed to find doc id in ws_connections: {}\nCleaning up",
+                    id_str
+                );
                 let _: () = conn.del(key).await?;
             }
         }
@@ -204,20 +214,18 @@ async fn save_document_and_relations(
     State(state): State<AppState>,
     Json(payload): Json<DocumentCreateRequest>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
-
     if payload.title.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             json!({ "success": false, "message": "Title must not be empty" }).to_string(),
         ));
-    }    
+    }
     if payload.format.is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
             json!({ "success": false, "message": "Format must not be empty" }).to_string(),
         ));
     }
-
 
     let collection = state.mongo_db.collection::<Document>("documents");
 
@@ -306,7 +314,10 @@ async fn save_document_and_relations(
         })?;
     }
 
-    Ok((StatusCode::OK, json!({ "success": true, "message": "Created" }).to_string()))
+    Ok((
+        StatusCode::OK,
+        json!({ "success": true, "message": "Created" }).to_string(),
+    ))
 }
 
 // This function handles the request for getting all documents belonging to the owner
@@ -471,27 +482,25 @@ async fn get_all_documents_shared(
 
 // ADD GROUPS INTO POSTGRES TABLE
 
-pub async fn create_groups(
+async fn create_groups(
     State(state): State<AppState>,
     Json(payload): Json<Vec<GroupsRequest>>,
 ) -> Result<(StatusCode, String), (StatusCode, String)> {
     for group in payload {
-
         // Check for malformed requests
         if group.name.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
                 json!({ "success": false, "message": "Group name must not be empty" }).to_string(),
             ));
-        }    
+        }
 
         if group.members.is_empty() {
             return Err((
                 StatusCode::BAD_REQUEST,
                 json!({ "success": false, "message": "Members must not be empty" }).to_string(),
             ));
-        }    
-
+        }
 
         // Start transaction
         let mut tx: Transaction<'_, Postgres> = state.pg_pool.begin().await.map_err(|e| {
@@ -615,7 +624,8 @@ async fn get_user_role(
     if rows.is_empty() {
         return Ok((
             StatusCode::NOT_FOUND,
-            json!({ "success": false, "message": "No role found for this user and document" }).to_string(),
+            json!({ "success": false, "message": "No role found for this user and document" })
+                .to_string(),
         ));
     }
 
@@ -651,77 +661,3 @@ async fn save_document(
 }
 
 // ***************************************************************************************************************************************
-
-// Struct for the login request
-#[derive(Deserialize)]
-struct LoginRequest {
-    email: String,
-    password: String,
-}
-
-#[derive(Deserialize)]
-pub struct GetDocumentRequest {
-    pub email: String,
-}
-
-#[derive(Serialize)]
-struct RelationRow {
-    user_email: String,
-    document_id: String,
-    user_role: String,
-}
-
-// Struct for the user row returned from the database
-#[derive(Serialize)]
-struct UserRow {
-    email: String,
-    first_name: String,
-    last_name: String,
-}
-
-#[derive(Clone)]
-pub struct AppState {
-    pg_pool: PgPool,
-    mongo_db: MongoDatabase,
-    redis_client: Client,
-    ws_connections: Arc<Mutex<HashMap<String, usize>>>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-struct Document {
-    #[serde(rename = "_id", skip_serializing_if = "Option::is_none")]
-    id: Option<ObjectId>,
-    title: String,
-    content: String,
-    format: String,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-struct DocumentCreateRequest {
-    title: String,
-    format: String,
-    collaborators: Vec<String>,
-    readers: Vec<String>,
-    owner: String,
-    groups: Vec<i32>,
-}
-
-// STRUCT FOR GROUPS REQUEST
-#[derive(Deserialize, Serialize, Debug)]
-pub struct GroupsRequest {
-    pub owner: String,
-    pub name: String,
-    pub role: String,
-    pub members: Vec<String>,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct GetGroupsRequest {
-    pub email: String,
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-pub struct GetUserRole {
-    pub email: String,
-    pub document_id: String,
-}

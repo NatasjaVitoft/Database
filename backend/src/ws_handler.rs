@@ -1,5 +1,6 @@
 use std::error::Error;
 
+use crate::structs::WsParams;
 use crate::*;
 use axum::extract::ws::{Message, WebSocket};
 use axum::extract::{Query, WebSocketUpgrade};
@@ -7,7 +8,6 @@ use axum::response::IntoResponse;
 use axum::{extract::State, http::StatusCode};
 use futures_util::{SinkExt, StreamExt};
 use mongodb::bson::doc;
-use serde::Deserialize;
 
 // Redis
 use redis::AsyncCommands;
@@ -227,10 +227,4 @@ async fn user_has_access(email: &String, doc_id: &String, state: &AppState) -> O
     .ok()??;
 
     Some(user.user_role.unwrap())
-}
-
-#[derive(Debug, Deserialize)]
-pub struct WsParams {
-    pub user_email: String,
-    pub document_id: String,
 }
