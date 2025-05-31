@@ -1,6 +1,13 @@
 # PDF UNITED
 (Or so it could be called)
 
+![Static Badge](https://img.shields.io/badge/React-19.1.0-green)
+![Static Badge](https://img.shields.io/badge/npm-11.3.0-green)
+![Static Badge](https://img.shields.io/badge/Rustc-1.85.0-green)
+![Static Badge](https://img.shields.io/badge/PostgreSQL-17.4-green)
+![Static Badge](https://img.shields.io/badge/Redis-7.4.2-green)
+![Static Badge](https://img.shields.io/badge/MongoDB-7-green)
+
 A proof-of-concept real time collaboration text-editor project created for our course exam in Database Systems.
 
 Features as of now:
@@ -9,8 +16,11 @@ Features as of now:
 - Document sharing editor/read-only
 - Group document sharing editor/read-only
 
+![](docs/projects_screenshot.png)
 
+![](docs/diagram/system_diagram.png)
 
+The project is a simulation of a server-based architecture. It runs 4 docker containers for MongoDB shards, configuration server and router, and 2 containers for a Redis database with a replica. Beware of CPU and memory usage!
 
 ### How to setup and run:
 

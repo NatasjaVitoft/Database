@@ -124,7 +124,7 @@ export function Projects() {
         <DocumentEditor document={document} setDocument={setDocument} />
       ) : (
         <>
-          <h2>Projects blebalaw</h2>
+          <h2>Projects</h2>
           <ProjectList setDocument={setDocument}
             email={email} ownedProjects={ownedProjects}
             setOwnedProjects={setOwnedProjects}

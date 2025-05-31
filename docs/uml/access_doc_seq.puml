@@ -1,0 +1,12 @@
+
+@startuml acces_doc_seq
+Client -> API: Acces Document
+API -> PostgreSQL: user_has_acces
+PostgreSQL -> API: Granted
+API -> Client: Granted. Upgrade websocket
+== Websocket Upgrade ==
+API -> Redis: Fetch or insert content
+API --> Client: Send Content
+API <--> Client: Receive and push updates
+API <-> Redis: Receive and push updates
+@enduml
