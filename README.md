@@ -14,7 +14,7 @@ Features as of now:
 
 ### How to setup and run:
 
-**Prerequisites:**
+#### Prerequisites:
 
 1. An installation of postgreSQL running on localhost with default port configuration.
     Connection string can be modified in `./backend/.env` if for example using another user than `postgres:postgres`
@@ -30,8 +30,6 @@ Features as of now:
 1. Start postgreSQL and create database: `pdfunited`
 2. Execute script in db: `./scripts/create_ps_db.sql`
 3. insert a user into the `users` table to login with later
-
-This will setup the database structure
 
 #### Setup Redis and MongoDB:
 
