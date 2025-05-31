@@ -1,5 +1,13 @@
 BEGIN;
 
+CREATE DOMAIN public.role
+    AS text;
+
+ALTER DOMAIN public.role OWNER TO postgres;
+
+ALTER DOMAIN public.role
+    ADD CONSTRAINT role_check CHECK (VALUE ~ 'owner'::text OR VALUE ~ 'editor'::text OR VALUE ~ 'reader'::text);
+
 
 CREATE TABLE IF NOT EXISTS public.document_relation
 (
