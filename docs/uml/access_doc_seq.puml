@@ -5,8 +5,21 @@ API -> PostgreSQL: user_has_acces
 PostgreSQL -> API: Granted
 API -> Client: Granted. Upgrade websocket
 == Websocket Upgrade ==
-API -> Redis: Fetch or insert content
+API <- MongoDB 
+API <-> Redis: Fetch content or insert from MongoDB
 API --> Client: Send Content
-API <--> Client: Receive and push updates
-API <-> Redis: Receive and push updates
+API -> Redis: Create and/or subcribe client to Pub/Sub channel
+loop
+API <-- Client: Receive Update
+API -> Redis: Write content to key/value
+API -> Redis: Publish content to pub/sub
+API <- Redis: Receive pub/sub publish
+API -> Client: Push update to client
+API -> MongoDB: Periodically flush to MongoDB
+end
+== Websocket Disconnect ==
+API -> MongoDB: Flush to MongoDB
+API -> Redis: Remove pub/sub channel (on last client)
+API -> Redis: Remove key/value store (on last client)
+
 @enduml
