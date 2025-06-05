@@ -72,6 +72,13 @@ ALTER TABLE IF EXISTS public.group_members
     ON DELETE NO ACTION
     NOT VALID;
 
+ALTER TABLE IF EXISTS public.group_members
+    ADD CONSTRAINT member_email_fk FOREIGN KEY (member_email)
+    REFERENCES public.users (email) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE NO ACTION
+    NOT VALID;
+
 
 ALTER TABLE IF EXISTS public.groups
     ADD CONSTRAINT owner_email_fk FOREIGN KEY (owner_email)
@@ -82,5 +89,7 @@ ALTER TABLE IF EXISTS public.groups
 ALTER TABLE IF EXISTS public.groups
     ADD CONSTRAINT unique_group_name
     UNIQUE (owner_email, group_name);
+
+
 
 END;
